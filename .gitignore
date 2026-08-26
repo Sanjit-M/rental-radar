@@ -1,23 +1,22 @@
 # Dependencies
 node_modules/
-.pnpm-store/
 
-# Production build output
+# Build artifacts
 dist/
+build/
+*.tsbuildinfo
 
-# SQLite Database storage
+# SQLite Database & Local Data
 data/*.db
+data/*.db-journal
 data/*.db-wal
 data/*.db-shm
 
-# Environment & local session profiles
-.env
-.env.local
+# Facebook Session Profile
 .fb_rental_profile/
-*.log
 
-# OS & Editor
+# Environment and OS
+.env
+.env.*
 .DS_Store
-Thumbs.db
-.vscode/
-.idea/
+*.log

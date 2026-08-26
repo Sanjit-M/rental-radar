@@ -1,17 +1,9 @@
-import { DatabaseSync } from 'node:sqlite';
+import { createClient, Client } from '@libsql/client';
 import path from 'path';
 import fs from 'fs';
 
-const dataDir = path.resolve(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
-
-const dbPath = path.join(dataDir, 'listings.db');
-export const db = new DatabaseSync(dbPath);
-
-// Initialize schema
-db.exec(`
+/** Schema SQL shared identically across both local SQLite and Turso Cloud SQLite. */
+export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS listings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   fb_post_id TEXT UNIQUE NOT NULL,
@@ -58,4 +50,118 @@ CREATE TABLE IF NOT EXISTS scrape_logs (
   error_message TEXT,
   ran_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-`);
+`;
+
+/** Abstract Database Interface for Dual-Mode Execution. */
+export interface IDatabase {
+  execute(sql: string, args?: any[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }>;
+  query<T = any>(sql: string, args?: any[]): Promise<T[]>;
+  queryOne<T = any>(sql: string, args?: any[]): Promise<T | null>;
+  initSchema(): Promise<void>;
+  isTurso(): boolean;
+}
+
+// 1. Turso Cloud Client Implementation
+class TursoDatabase implements IDatabase {
+  private client: Client;
+
+  constructor(url: string, authToken?: string) {
+    this.client = createClient({ url, authToken });
+  }
+
+  isTurso(): boolean {
+    return true;
+  }
+
+  async initSchema(): Promise<void> {
+    // Execute DDL statements sequentially for Turso
+    const statements = SCHEMA_SQL.split(';')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    for (const stmt of statements) {
+      await this.client.execute(stmt);
+    }
+  }
+
+  async execute(sql: string, args: any[] = []): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
+    const result = await this.client.execute({ sql, args });
+    return {
+      changes: result.rowsAffected,
+      lastInsertRowid: result.lastInsertRowid,
+    };
+  }
+
+  async query<T = any>(sql: string, args: any[] = []): Promise<T[]> {
+    const result = await this.client.execute({ sql, args });
+    return result.rows as unknown as T[];
+  }
+
+  async queryOne<T = any>(sql: string, args: any[] = []): Promise<T | null> {
+    const rows = await this.query<T>(sql, args);
+    return rows.length > 0 ? rows[0]! : null;
+  }
+}
+
+// 2. Local node:sqlite Client Implementation
+class LocalNodeDatabase implements IDatabase {
+  private dbInstance: any;
+
+  constructor() {
+    const dataDir = path.resolve(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const dbPath = path.join(dataDir, 'listings.db');
+
+    // Dynamic require/import for node:sqlite
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { DatabaseSync } = require('node:sqlite');
+    this.dbInstance = new DatabaseSync(dbPath);
+    this.dbInstance.exec(SCHEMA_SQL);
+  }
+
+  isTurso(): boolean {
+    return false;
+  }
+
+  async initSchema(): Promise<void> {
+    this.dbInstance.exec(SCHEMA_SQL);
+  }
+
+  async execute(sql: string, args: any[] = []): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
+    const stmt = this.dbInstance.prepare(sql);
+    const res = stmt.run(...args);
+    return {
+      changes: res.changes,
+      lastInsertRowid: res.lastInsertRowid,
+    };
+  }
+
+  async query<T = any>(sql: string, args: any[] = []): Promise<T[]> {
+    const stmt = this.dbInstance.prepare(sql);
+    const rows = stmt.all(...args);
+    return rows as T[];
+  }
+
+  async queryOne<T = any>(sql: string, args: any[] = []): Promise<T | null> {
+    const stmt = this.dbInstance.prepare(sql);
+    const row = stmt.get(...args);
+    return (row as T) || null;
+  }
+}
+
+/** Global unified database client instance. */
+function createDatabase(): IDatabase {
+  const tursoUrl = process.env.TURSO_DATABASE_URL;
+  const tursoToken = process.env.TURSO_AUTH_TOKEN;
+
+  if (tursoUrl) {
+    console.log(`📡 Connected to Turso Cloud SQLite at ${tursoUrl.replace(/:\/\/.*@/, '://***@')}`);
+    return new TursoDatabase(tursoUrl, tursoToken);
+  }
+
+  return new LocalNodeDatabase();
+}
+
+export const db: IDatabase = createDatabase();

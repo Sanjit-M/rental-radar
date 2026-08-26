@@ -64,8 +64,8 @@ interface RawDatabaseRow {
 
 function mapRowToListing(row: RawDatabaseRow): RentalListing {
   const entities: ExtractedEntities = {
-    rent: row.rent !== null ? makeINR(row.rent) : null,
-    deposit: row.deposit !== null ? makeINR(row.deposit) : null,
+    rent: row.rent !== null ? makeINR(Number(row.rent)) : null,
+    deposit: row.deposit !== null ? makeINR(Number(row.deposit)) : null,
     isBrokerage: Boolean(row.is_brokerage),
     isGatedSociety: Boolean(row.is_gated_society),
     societyName: row.society_name || null,
@@ -79,10 +79,10 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
   };
 
   const commute: CommuteWindow = {
-    distanceKm: makeKilometers(row.distance_km),
-    inboundMins: makeMinutes(row.inbound_mins),
-    outboundMins: makeMinutes(row.outbound_mins),
-    twoWayAvgPeakMins: makeMinutes(row.two_way_avg_peak_mins),
+    distanceKm: makeKilometers(Number(row.distance_km)),
+    inboundMins: makeMinutes(Number(row.inbound_mins)),
+    outboundMins: makeMinutes(Number(row.outbound_mins)),
+    twoWayAvgPeakMins: makeMinutes(Number(row.two_way_avg_peak_mins)),
     hasPanathurUnderpassBottleneck: Boolean(row.has_panathur_underpass_bottleneck),
   };
 
@@ -106,7 +106,7 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
   }
 
   // SAFETY: ID is populated by autoincrement primary key in SQLite.
-  const id = row.id as ListingId;
+  const id = Number(row.id) as ListingId;
   const fbPostId = makeFbPostId(row.fb_post_id);
 
   return {
@@ -129,15 +129,22 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
   };
 }
 
-/** Repository for persisting and querying rental listings. */
+/** Repository for persisting and querying rental listings across Local SQLite or Turso. */
 export const listingRepository = {
+  /**
+   * Initializes schema if running against a fresh database.
+   */
+  async init(): Promise<void> {
+    await db.initSchema();
+  },
+
   /**
    * Inserts or updates a rental listing identified by fb_post_id.
    *
    * @param listing - Domain listing payload without generated IDs.
    * @returns Persisted RentalListing domain entity.
    */
-  upsertListing(listing: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'>): RentalListing {
+  async upsertListing(listing: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'>): Promise<RentalListing> {
     const upsertSql = `
       INSERT INTO listings (
         fb_post_id, group_name, post_url, author_name, raw_text,
@@ -170,8 +177,7 @@ export const listingRepository = {
         updated_at=datetime('now');
     `;
 
-    const stmt = db.prepare(upsertSql);
-    stmt.run(
+    await db.execute(upsertSql, [
       listing.fbPostId,
       listing.groupName,
       listing.postUrl,
@@ -199,11 +205,11 @@ export const listingRepository = {
       listing.score,
       JSON.stringify(listing.scoreBreakdown),
       listing.tier,
-      listing.userStatus || 'new'
-    );
+      listing.userStatus || 'new',
+    ]);
 
-    const getStmt = db.prepare('SELECT * FROM listings WHERE fb_post_id = ?');
-    const row = getStmt.get(listing.fbPostId) as RawDatabaseRow;
+    const row = await db.queryOne<RawDatabaseRow>('SELECT * FROM listings WHERE fb_post_id = ?', [listing.fbPostId]);
+    if (!row) throw new Error('Failed to retrieve upserted listing');
     return mapRowToListing(row);
   },
 
@@ -213,7 +219,7 @@ export const listingRepository = {
    * @param options - Query filters and sorting parameters.
    * @returns Array of matching RentalListing domain entities.
    */
-  getListings(options: ListingQueryOptions = {}): RentalListing[] {
+  async getListings(options: ListingQueryOptions = {}): Promise<RentalListing[]> {
     let sql = 'SELECT * FROM listings WHERE 1=1';
     const params: (string | number)[] = [];
 
@@ -264,8 +270,7 @@ export const listingRepository = {
         break;
     }
 
-    const stmt = db.prepare(sql);
-    const rows = stmt.all(...params) as RawDatabaseRow[];
+    const rows = await db.query<RawDatabaseRow>(sql, params);
     return rows.map(mapRowToListing);
   },
 
@@ -275,9 +280,8 @@ export const listingRepository = {
    * @param id - Internal Listing ID.
    * @returns Matching RentalListing or null.
    */
-  getListingById(id: number): RentalListing | null {
-    const stmt = db.prepare('SELECT * FROM listings WHERE id = ?');
-    const row = stmt.get(id) as RawDatabaseRow | undefined;
+  async getListingById(id: number): Promise<RentalListing | null> {
+    const row = await db.queryOne<RawDatabaseRow>('SELECT * FROM listings WHERE id = ?', [id]);
     return row ? mapRowToListing(row) : null;
   },
 
@@ -288,12 +292,12 @@ export const listingRepository = {
    * @param status - Target UserListingStatus.
    * @returns True if record was updated.
    */
-  updateStatus(id: number, status: UserListingStatus): boolean {
-    const stmt = db.prepare(`
-      UPDATE listings SET user_status = ?, updated_at = datetime('now') WHERE id = ?
-    `);
-    stmt.run(status, id);
-    return true;
+  async updateStatus(id: number, status: UserListingStatus): Promise<boolean> {
+    const res = await db.execute(
+      'UPDATE listings SET user_status = ?, updated_at = datetime("now") WHERE id = ?',
+      [status, id]
+    );
+    return res.changes > 0;
   },
 
   /**
@@ -301,8 +305,8 @@ export const listingRepository = {
    *
    * @returns DashboardStats record.
    */
-  getStats(): DashboardStats {
-    const statsStmt = db.prepare(`
+  async getStats(): Promise<DashboardStats> {
+    const statsRow = await db.queryOne<Record<string, number | null>>(`
       SELECT 
         COUNT(*) as total_listings,
         SUM(CASE WHEN score >= 90 THEN 1 ELSE 0 END) as unicorn_matches,
@@ -314,10 +318,11 @@ export const listingRepository = {
         SUM(CASE WHEN is_brokerage = 0 THEN 1 ELSE 0 END) as direct_owner_count
       FROM listings
     `);
-    const row = (statsStmt.get() || {}) as Record<string, number | null>;
+    const row = statsRow || {};
 
-    const lastLogStmt = db.prepare('SELECT ran_at FROM scrape_logs ORDER BY ran_at DESC LIMIT 1');
-    const lastLogRow = lastLogStmt.get() as { ran_at?: string } | undefined;
+    const lastLogRow = await db.queryOne<{ ran_at?: string }>(
+      'SELECT ran_at FROM scrape_logs ORDER BY ran_at DESC LIMIT 1'
+    );
 
     return {
       totalListings: Number(row.total_listings || 0),
@@ -340,11 +345,10 @@ export const listingRepository = {
    * @param itemsMatched - Count of posts successfully passing all filters.
    * @param errorMessage - Optional error or warning message.
    */
-  logScrapeRun(status: string, itemsScanned: number, itemsMatched: number, errorMessage?: string): void {
-    const stmt = db.prepare(`
-      INSERT INTO scrape_logs (status, items_scanned, items_matched, error_message)
-      VALUES (?, ?, ?, ?)
-    `);
-    stmt.run(status, itemsScanned, itemsMatched, errorMessage || null);
+  async logScrapeRun(status: string, itemsScanned: number, itemsMatched: number, errorMessage?: string): Promise<void> {
+    await db.execute(
+      'INSERT INTO scrape_logs (status, items_scanned, items_matched, error_message) VALUES (?, ?, ?, ?)',
+      [status, itemsScanned, itemsMatched, errorMessage || null]
+    );
   },
 };

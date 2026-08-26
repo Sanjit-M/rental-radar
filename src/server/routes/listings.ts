@@ -4,7 +4,7 @@ import { UserListingStatus } from '../../domain/types';
 
 export const listingsRouter = new Hono();
 
-listingsRouter.get('/', (c) => {
+listingsRouter.get('/', async (c) => {
   const minScore = c.req.query('minScore') ? parseInt(c.req.query('minScore')!, 10) : undefined;
   const maxRent = c.req.query('maxRent') ? parseInt(c.req.query('maxRent')!, 10) : undefined;
   const bhkType = c.req.query('bhkType') || undefined;
@@ -23,17 +23,17 @@ listingsRouter.get('/', (c) => {
     sortBy,
   };
 
-  const listings = listingRepository.getListings(options);
+  const listings = await listingRepository.getListings(options);
   return c.json({ count: listings.length, listings });
 });
 
-listingsRouter.get('/:id', (c) => {
+listingsRouter.get('/:id', async (c) => {
   const id = parseInt(c.req.param('id'), 10);
   if (isNaN(id)) {
     return c.json({ error: 'Invalid ID' }, 400);
   }
 
-  const listing = listingRepository.getListingById(id);
+  const listing = await listingRepository.getListingById(id);
   if (!listing) {
     return c.json({ error: 'Listing not found' }, 404);
   }
@@ -53,11 +53,11 @@ listingsRouter.patch('/:id/status', async (c) => {
     return c.json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }, 400);
   }
 
-  const success = listingRepository.updateStatus(id, body.status);
+  const success = await listingRepository.updateStatus(id, body.status);
   if (!success) {
     return c.json({ error: 'Failed to update status' }, 404);
   }
 
-  const updated = listingRepository.getListingById(id);
+  const updated = await listingRepository.getListingById(id);
   return c.json({ success: true, listing: updated });
 });

@@ -1,8 +1,8 @@
 # PTP & Kadubeesanahalli Rental Radar
 
-An automated, local-first intelligence system designed to scrape, filter, parse, and score rental accommodations (1 BHK, 2 BHK, 3 BHK, and private flatmate rooms) near Prestige Tech Park (PTP) and Kadubeesanahalli, Bangalore.
+An automated, 100% free intelligence system designed to scrape, filter, parse, and score rental accommodations (1 BHK, 2 BHK, 3 BHK, and private flatmate rooms) near Prestige Tech Park (PTP) and Kadubeesanahalli, Bangalore.
 
-Built with a Unified Full-Stack TypeScript architecture using Playwright, Node Native SQLite, Hono, React, Vite, and Tailwind CSS.
+Built with a Unified Full-Stack TypeScript architecture using Playwright, Dual-Mode SQLite (Local `node:sqlite` + Turso Cloud), Hono Serverless, React, Vite, and Tailwind CSS.
 
 ---
 
@@ -14,59 +14,114 @@ Built with a Unified Full-Stack TypeScript architecture using Playwright, Node N
 | `pnpm test` | Run Vitest unit test suites |
 | `pnpm build` | Compile TypeScript and build production bundle |
 | `pnpm auth:setup` | One-time interactive Facebook browser authentication |
+| `pnpm auth:export` | Export Facebook session cookies string for GitHub Secrets |
 | `pnpm server` | Start local Hono backend API server (Port 3001) |
 | `pnpm dev` | Start React frontend Vite development server (Port 3000) |
 | `pnpm scrape` | Trigger an immediate manual Facebook group scrape cycle |
 
 ---
 
-## Local Setup & Development
+## Free Cloud Deployment Architecture
 
-### 1. Prerequisites
-- Node.js v22+ (v25+ supported with native `node:sqlite`)
-- pnpm package manager (`brew install pnpm` or `npm install -g pnpm`)
-
-### 2. Installation
-```bash
-# Clone the repository
-git clone https://github.com/Sanjit-M/rental-radar.git
-cd rental-radar
-
-# Install dependencies
-pnpm install
-
-# Run automated tests
-pnpm test
+```text
+┌────────────────────────────────────────────────────────┐
+│ GitHub Actions (Free Unlimited / 2,000 min/mo)         │
+│  - Hourly Cron Trigger (0 * * * *)                     │
+│  - Playwright Headless Scraper                         │
+│  - Injects FB_SESSION_STORAGE secret                   │
+└──────────────────────────┬─────────────────────────────┘
+                           │ Syncs new listings
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│ Turso Cloud SQLite (100% Free Tier)                    │
+│  - 9 GB Storage & 1 Billion Row Reads/Month            │
+│  - Instant global latency                              │
+└──────────────────────────┬─────────────────────────────┘
+                           │ Queries / Updates
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│ Vercel Serverless & CDN (100% Free Tier)               │
+│  - Hono Serverless API (/api/*)                        │
+│  - React + Vite Dashboard SPA                          │
+│  - Passcode Gate (DASHBOARD_PASSCODE)                  │
+└────────────────────────────────────────────────────────┘
 ```
-
-### 3. Running Locally
-In terminal 1, start the backend API server:
-```bash
-pnpm server
-```
-
-In terminal 2, start the React frontend dashboard:
-```bash
-pnpm dev
-```
-Open **http://localhost:3000** in your browser.
 
 ---
 
-## Facebook Group Ingestion & Scraping
+## 100% Free Setup & Deployment Guide
 
-### Step 1: One-Time Authentication Setup
-To scrape your joined Facebook rental groups safely without hardcoding credentials:
+### Step 1: Create Free Turso Database
+Turso provides 9 GB of cloud SQLite storage and 1 billion row reads/month for free.
+
+1. Install the Turso CLI or sign up at [turso.tech](https://turso.tech):
+   ```bash
+   brew install tursodatabase/tap/turso
+   turso auth signup # or turso auth login
+   ```
+2. Create a new database:
+   ```bash
+   turso db create rental-radar
+   ```
+3. Retrieve your database URL and Auth Token:
+   ```bash
+   turso db show rental-radar --url
+   # Output: libsql://rental-radar-[username].turso.io
+
+   turso db tokens create rental-radar
+   # Output: [Your Turso Auth Token]
+   ```
+
+---
+
+### Step 2: Deploy Frontend & API to Vercel
+1. Push this repository to your GitHub account (already live at `https://github.com/Sanjit-M/rental-radar`).
+2. Go to [vercel.com](https://vercel.com) and click **"Add New Project"** -> Import `rental-radar`.
+3. Under **Environment Variables**, add:
+   - `TURSO_DATABASE_URL` = `libsql://rental-radar-[username].turso.io`
+   - `TURSO_AUTH_TOKEN` = `[Your Turso Auth Token]`
+   - `DASHBOARD_PASSCODE` = `[Choose a secret PIN/Passcode to protect your dashboard]`
+4. Click **Deploy**. Vercel will build and launch your dashboard with a free `https://rental-radar-*.vercel.app` URL.
+
+---
+
+### Step 3: Setup Automated Hourly Facebook Scraping
+To scrape private/joined Facebook groups headlessly in GitHub Actions:
+
+1. **Log in locally once**:
+   ```bash
+   pnpm auth:setup
+   ```
+   A browser window will open. Log into your Facebook account, then press `ENTER` in your terminal.
+
+2. **Export session cookies**:
+   ```bash
+   pnpm auth:export
+   ```
+   This will print a base64 encoded string containing your active session cookies (`c_user`, `xs`, `datr`).
+
+3. **Add GitHub Repository Secrets**:
+   Go to your GitHub repo -> **Settings** -> **Secrets and variables** -> **Actions** -> **New repository secret**:
+   - `FB_SESSION_STORAGE` = `[Paste the exported string]`
+   - `TURSO_DATABASE_URL` = `libsql://rental-radar-[username].turso.io`
+   - `TURSO_AUTH_TOKEN` = `[Your Turso Auth Token]`
+
+4. **Done!** GitHub Actions will now automatically trigger `.github/workflows/scraper.yml` every hour, scraping all target Facebook groups and syncing high-scoring rental leads directly into your Turso database.
+
+---
+
+## Local Development (Offline & Dual-Mode)
+
+During local development, you do not need internet access or cloud credentials. The app automatically falls back to local `node:sqlite` in `data/listings.db`:
+
 ```bash
-pnpm auth:setup
-```
-1. A Chromium browser window will launch.
-2. Log into your Facebook account.
-3. Return to the terminal and press `ENTER` to save the persistent browser context to `~/.fb_rental_profile`.
+# Terminal 1: Start backend server
+pnpm server
 
-### Step 2: Running Scrape Jobs
-- **Manual CLI**: Run `pnpm scrape` anytime or schedule via cron/launchd.
-- **In-App Trigger**: Click "Check Groups Now" on the dashboard header.
+# Terminal 2: Start frontend
+pnpm dev
+```
+Open **http://localhost:3000** in your browser.
 
 ---
 
@@ -105,32 +160,38 @@ pnpm auth:setup
 
 ```text
 rental-radar/
+├── .github/workflows/           # Automated CI/CD
+│   └── scraper.yml              # Hourly Facebook scraper cron workflow
+├── api/                         # Vercel Serverless Adapter
+│   └── index.ts                 # Hono Vercel function entry point
 ├── CONTEXT.md                   # Ubiquitous domain glossary
 ├── docs/adr/                    # Architectural Decision Records
 │   ├── 0001-native-sqlite-storage.md
 │   ├── 0002-weekday-peak-traffic-commute-engine.md
-│   └── 0003-local-persistent-playwright-session.md
+│   ├── 0003-local-persistent-playwright-session.md
+│   └── 0004-vercel-turso-github-actions-free-deployment.md
 ├── src/
-│   ├── domain/                  # Pure Shared Domain
+│   ├── domain/                  # Pure Shared Domain Layer
 │   │   ├── prelude.ts           # Ambient Result monad, branded types, defect helpers
 │   │   ├── types.ts             # Domain models (RentalListing, CommuteWindow, etc.)
 │   │   ├── config.ts            # PTP coordinates, traffic multipliers, scoring weights
 │   │   ├── parser/              # Pure Regex & NLP extraction
 │   │   ├── commute/             # Weekday 11am-1pm & 4pm-6pm IST traffic simulator
 │   │   └── scorer/              # 0-100 rating computation & tier assignment
-│   ├── db/                      # Node Native SQLite (DatabaseSync)
-│   │   ├── database.ts          # Schema & connection
+│   ├── db/                      # Dual-Mode Storage (node:sqlite / Turso LibSQL)
+│   │   ├── database.ts          # Schema, connection & client switch
 │   │   └── repository.ts        # Filter queries & status updates
 │   ├── scraper/                 # Playwright Ingestion
 │   │   ├── authSetup.ts         # One-time login helper
-│   │   ├── browserSession.ts    # Session loader (~/.fb_rental_profile)
+│   │   ├── exportSession.ts     # Cookie exporter for GitHub Secrets
+│   │   ├── browserSession.ts    # Dual local / secret session manager
 │   │   ├── groupScraper.ts      # Facebook group crawler
 │   │   └── seedData.ts          # Realistic fixtures
-│   ├── server/                  # Hono Local Backend API
+│   ├── server/                  # Hono Local & Serverless API
 │   │   ├── routes/              # /api/listings, /api/stats, /api/scrape
 │   │   └── index.ts             # Backend entry point (Port 3001)
 │   └── client/                  # React + Vite + Tailwind CSS UI
-│       ├── components/          # Header, FilterBar, ListingCard, ListingTable, Modals
+│       ├── components/          # Header, FilterBar, ListingCard, Table, Modals
 │       └── App.tsx              # Main Dashboard
 └── tests/                       # Vitest Unit Tests (RGR TDD)
 ```

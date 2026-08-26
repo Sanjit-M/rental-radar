@@ -1,110 +1,131 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RentalListing, DashboardStats, UserListingStatus } from '../domain/types';
 import { api } from './services/api';
+import { RentalListing, DashboardStats, UserListingStatus } from '../domain/types';
 import { HeaderStats } from './components/HeaderStats';
 import { FilterBar } from './components/FilterBar';
 import { ListingCard } from './components/ListingCard';
 import { ListingTable } from './components/ListingTable';
 import { ScoreBreakdownModal } from './components/ScoreBreakdownModal';
-import { Sparkles, Compass, AlertCircle } from 'lucide-react';
+import { PasscodeModal } from './components/PasscodeModal';
+import { Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [listings, setListings] = useState<RentalListing[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [isScraping, setIsScraping] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
-  // Filters
+  // Filters State
   const [search, setSearch] = useState<string>('');
-  const [minScore, setMinScore] = useState<number>(0);
-  const [maxRent, setMaxRent] = useState<number>(50000);
+  const [minScore, setMinScore] = useState<number>(50);
+  const [maxRent, setMaxRent] = useState<number>(35000);
   const [bhkType, setBhkType] = useState<string>('all');
   const [furnishing, setFurnishing] = useState<string>('all');
   const [userStatus, setUserStatus] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('score_desc');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
-  // Modal
-  const [selectedListing, setSelectedListing] = useState<RentalListing | null>(null);
+  // Modal State
+  const [inspectListing, setInspectListing] = useState<RentalListing | null>(null);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
-      const s = await api.getStats();
-      setStats(s);
-    } catch {
-      // ignore
+      const data = await api.getStats();
+      setStats(data);
+    } catch (err: any) {
+      if (err.message === 'AUTH_REQUIRED') {
+        setIsAuthModalOpen(true);
+      }
     }
-  };
+  }, []);
 
   const fetchListings = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setIsLoading(true);
-      setError(null);
-      const res = await api.getListings({
-        minScore: minScore > 0 ? minScore : undefined,
-        maxRent: maxRent < 50000 ? maxRent : undefined,
+      const params = {
+        search: search || undefined,
+        minScore,
+        maxRent: maxRent >= 40000 ? undefined : maxRent,
         bhkType: bhkType !== 'all' ? bhkType : undefined,
         furnishing: furnishing !== 'all' ? furnishing : undefined,
         userStatus: userStatus !== 'all' ? userStatus : undefined,
-        search: search.trim() || undefined,
         sortBy,
-      });
-      setListings(res.listings);
-      fetchStats();
+      };
+      const data = await api.getListings(params);
+      setListings(data.listings);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch listings');
+      if (err.message === 'AUTH_REQUIRED') {
+        setIsAuthModalOpen(true);
+      } else {
+        setError(err.message || 'Failed to load listings');
+      }
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }, [minScore, maxRent, bhkType, furnishing, userStatus, search, sortBy]);
+  }, [search, minScore, maxRent, bhkType, furnishing, userStatus, sortBy]);
 
   useEffect(() => {
+    fetchStats();
     fetchListings();
-  }, [fetchListings]);
+  }, [fetchStats, fetchListings]);
 
-  const handleStatusChange = async (id: number, status: UserListingStatus) => {
+  const handleStatusChange = async (id: number, newStatus: UserListingStatus) => {
     try {
-      // Optimistic update
-      setListings((prev) =>
-        prev.map((l) => (l.id === id ? { ...l, userStatus: status } : l))
-      );
-      await api.updateListingStatus(id, status);
-      fetchStats();
+      const result = await api.updateListingStatus(id, newStatus);
+      if (result.success) {
+        setListings((prev) =>
+          prev.map((item) => (item.id === id ? { ...item, userStatus: newStatus } : item))
+        );
+        fetchStats();
+      }
     } catch (err: any) {
-      console.error('Failed to update status:', err);
-      fetchListings();
+      if (err.message === 'AUTH_REQUIRED') {
+        setIsAuthModalOpen(true);
+      } else {
+        alert('Failed to update status: ' + err.message);
+      }
     }
   };
 
   const handleTriggerScrape = async () => {
+    setIsScraping(true);
     try {
-      setIsScraping(true);
-      await api.triggerScrape();
-      setTimeout(() => {
-        setIsScraping(false);
-        fetchListings();
-      }, 3500);
+      const res = await api.triggerScrape();
+      alert(`Scraper triggered: ${res.message}`);
+      await fetchStats();
+      await fetchListings();
     } catch (err: any) {
+      if (err.message === 'AUTH_REQUIRED') {
+        setIsAuthModalOpen(true);
+      } else {
+        alert('Scrape failed: ' + err.message);
+      }
+    } finally {
       setIsScraping(false);
-      alert('Error triggering scrape: ' + err.message);
     }
   };
 
   const handleReseed = async () => {
     try {
-      setIsLoading(true);
-      await api.reseedData();
+      const res = await api.reseedData();
+      alert(`Loaded ${res.count} realistic Kadubeesanahalli listings.`);
+      await fetchStats();
       await fetchListings();
     } catch (err: any) {
-      alert('Error loading sample data: ' + err.message);
-      setIsLoading(false);
+      if (err.message === 'AUTH_REQUIRED') {
+        setIsAuthModalOpen(true);
+      } else {
+        alert('Reseed failed: ' + err.message);
+      }
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#030712] text-slate-100 pb-16">
-      {/* Header & Stats Banner */}
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white">
+      {/* Top Banner / Header */}
       <HeaderStats
         stats={stats}
         onTriggerScrape={handleTriggerScrape}
@@ -112,9 +133,9 @@ export const App: React.FC = () => {
         isScraping={isScraping}
       />
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1">
-        {/* Filters */}
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1 flex flex-col gap-6">
+        {/* Controls Toolbar */}
         <FilterBar
           search={search}
           onSearchChange={setSearch}
@@ -134,55 +155,58 @@ export const App: React.FC = () => {
           onViewModeChange={setViewMode}
         />
 
-        {/* Error State */}
+        {/* Status / Loading / Error */}
         {error && (
-          <div className="p-4 rounded-xl bg-rose-950/30 border border-rose-500/40 text-rose-300 text-sm flex items-center gap-2 mb-6">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+          <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-center justify-between text-rose-300 text-sm">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-rose-400" />
+              <span>{error}</span>
+            </div>
+            <button
+              onClick={() => fetchListings()}
+              className="px-3 py-1 bg-rose-500/20 hover:bg-rose-500/30 rounded-lg text-xs font-semibold"
+            >
+              Retry
+            </button>
           </div>
         )}
 
-        {/* Listings Display */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div
-                key={i}
-                className="glass-panel p-5 rounded-2xl h-64 animate-pulse space-y-4"
-              >
-                <div className="h-4 bg-slate-800 rounded w-1/3"></div>
-                <div className="h-6 bg-slate-800 rounded w-3/4"></div>
-                <div className="h-10 bg-slate-800 rounded"></div>
-                <div className="h-4 bg-slate-800 rounded w-1/2"></div>
-              </div>
-            ))}
+        {/* Listings Content */}
+        {loading ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-24 text-slate-400 gap-3">
+            <RefreshCw className="w-8 h-8 animate-spin text-indigo-400" />
+            <p className="text-sm font-medium">Scanning live rental leads near PTP...</p>
           </div>
         ) : listings.length === 0 ? (
-          <div className="glass-panel p-12 rounded-2xl text-center flex flex-col items-center justify-center max-w-lg mx-auto mt-8">
-            <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl mb-4 text-emerald-400">
-              <Compass className="w-8 h-8" />
+          <div className="flex-1 flex flex-col items-center justify-center py-20 text-center bg-slate-900/40 border border-slate-800 rounded-3xl p-8">
+            <div className="p-4 bg-slate-800/80 rounded-2xl text-slate-400 mb-3">
+              <Sparkles className="w-8 h-8 text-amber-400" />
             </div>
-            <h3 className="text-base font-bold text-white mb-1">
-              No matching flats found
-            </h3>
-            <p className="text-xs text-slate-400 mb-5">
-              Try relaxing your rent or score filters, or load the realistic Kadubeesanahalli sample data.
+            <h3 className="text-lg font-bold text-white mb-1">No Matching Listings Found</h3>
+            <p className="text-sm text-slate-400 max-w-md mb-6">
+              Try adjusting your rent slider, lowering the minimum score threshold, or widening the BHK type.
             </p>
             <button
-              onClick={handleReseed}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition-colors"
+              onClick={() => {
+                setMinScore(40);
+                setMaxRent(40000);
+                setBhkType('all');
+                setUserStatus('all');
+                setSearch('');
+              }}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-500/20"
             >
-              Load Sample Kadubeesanahalli Listings
+              Reset All Filters
             </button>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {listings.map((listing) => (
               <ListingCard
                 key={listing.id}
                 listing={listing}
                 onStatusChange={handleStatusChange}
-                onOpenScoreModal={setSelectedListing}
+                onOpenScoreModal={setInspectListing}
               />
             ))}
           </div>
@@ -190,15 +214,27 @@ export const App: React.FC = () => {
           <ListingTable
             listings={listings}
             onStatusChange={handleStatusChange}
-            onOpenScoreModal={setSelectedListing}
+            onOpenScoreModal={setInspectListing}
           />
         )}
       </main>
 
-      {/* Point-by-Point Score Breakdown Modal */}
-      <ScoreBreakdownModal
-        listing={selectedListing}
-        onClose={() => setSelectedListing(null)}
+      {/* Score Breakdown Audit Modal */}
+      {inspectListing && (
+        <ScoreBreakdownModal
+          listing={inspectListing}
+          onClose={() => setInspectListing(null)}
+        />
+      )}
+
+      {/* Passcode Security Modal */}
+      <PasscodeModal
+        isOpen={isAuthModalOpen}
+        onSuccess={() => {
+          setIsAuthModalOpen(false);
+          fetchStats();
+          fetchListings();
+        }}
       />
     </div>
   );

@@ -1,0 +1,40 @@
+name: Hourly Facebook Rental Scraper
+
+on:
+  schedule:
+    # Runs every hour at minute 0 (e.g. 1:00, 2:00, 3:00 UTC)
+    - cron: '0 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  scrape-and-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install chromium --with-deps
+
+      - name: Run Rental Scraper & Sync to Turso
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          FB_SESSION_STORAGE: ${{ secrets.FB_SESSION_STORAGE }}
+        run: pnpm scrape

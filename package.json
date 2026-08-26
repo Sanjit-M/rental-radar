@@ -10,10 +10,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "auth:setup": "tsx src/scraper/authSetup.ts",
+    "auth:export": "tsx src/scraper/exportSession.ts",
     "scrape": "tsx src/scraper/cli.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.8.2",
+    "@libsql/client": "^0.17.4",
     "clsx": "^2.1.0",
     "hono": "^4.1.0",
     "lucide-react": "^0.359.0",
