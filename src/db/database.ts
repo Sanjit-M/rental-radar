@@ -1,5 +1,4 @@
 import { createClient, Client } from '@libsql/client';
-import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 
@@ -63,25 +62,25 @@ export interface IDatabase {
   isTurso(): boolean;
 }
 
-// 1. Turso Cloud Client Implementation (with Auto-Schema Initialization)
-class TursoDatabase implements IDatabase {
+class LibSqlDatabase implements IDatabase {
   private client: Client;
+  private isCloud: boolean;
   private initPromise: Promise<void> | null = null;
 
   constructor(url: string, authToken?: string) {
+    this.isCloud = !url.startsWith('file:');
     this.client = createClient({ url, authToken });
   }
 
   isTurso(): boolean {
-    return true;
+    return this.isCloud;
   }
 
   private async ensureInitialized(): Promise<void> {
     if (!this.initPromise) {
       this.initPromise = this.initSchema().catch((err) => {
-        console.error('Failed to initialize Turso database schema:', err);
+        console.error('Database schema auto-init warning:', err.message);
         this.initPromise = null;
-        throw err;
       });
     }
     return this.initPromise;
@@ -96,13 +95,11 @@ class TursoDatabase implements IDatabase {
       try {
         await this.client.execute(stmt);
       } catch (err: any) {
-        // Ignore "already exists" errors during concurrent runs
         if (!err.message?.includes('already exists')) {
-          console.warn(`Turso DDL notice for [${stmt.slice(0, 30)}...]:`, err.message);
+          console.warn(`DDL notice:`, err.message);
         }
       }
     }
-    console.log('✅ Turso Cloud Database schema verified & ready.');
   }
 
   async execute(sql: string, args: any[] = []): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
@@ -127,66 +124,23 @@ class TursoDatabase implements IDatabase {
   }
 }
 
-// 2. Local node:sqlite Client Implementation
-class LocalNodeDatabase implements IDatabase {
-  private dbInstance: DatabaseSync;
-
-  constructor() {
-    const dataDir = path.resolve(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    const dbPath = path.join(dataDir, 'listings.db');
-    this.dbInstance = new DatabaseSync(dbPath);
-    this.dbInstance.exec(SCHEMA_SQL);
-    try {
-      this.dbInstance.exec("ALTER TABLE listings ADD COLUMN posted_time TEXT NOT NULL DEFAULT 'Recently';");
-    } catch {
-      // Column already exists
-    }
-  }
-
-  isTurso(): boolean {
-    return false;
-  }
-
-  async initSchema(): Promise<void> {
-    this.dbInstance.exec(SCHEMA_SQL);
-  }
-
-  async execute(sql: string, args: any[] = []): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
-    const stmt = this.dbInstance.prepare(sql);
-    const res = stmt.run(...args);
-    return {
-      changes: res.changes,
-      lastInsertRowid: res.lastInsertRowid,
-    };
-  }
-
-  async query<T = any>(sql: string, args: any[] = []): Promise<T[]> {
-    const stmt = this.dbInstance.prepare(sql);
-    const rows = stmt.all(...args);
-    return rows as T[];
-  }
-
-  async queryOne<T = any>(sql: string, args: any[] = []): Promise<T | null> {
-    const stmt = this.dbInstance.prepare(sql);
-    const row = stmt.get(...args);
-    return (row as T) || null;
-  }
-}
-
 /** Global unified database client instance. */
 function createDatabase(): IDatabase {
   const tursoUrl = process.env.TURSO_DATABASE_URL;
   const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
   if (tursoUrl) {
-    console.log(`📡 Connected to Turso Cloud SQLite at ${tursoUrl.replace(/:\/\/.*@/, '://***@')}`);
-    return new TursoDatabase(tursoUrl, tursoToken);
+    console.log(`📡 Connecting to Turso Cloud at ${tursoUrl.replace(/:\/\/.*@/, '://***@')}`);
+    return new LibSqlDatabase(tursoUrl, tursoToken);
   }
 
-  return new LocalNodeDatabase();
+  // Local file mode
+  const dataDir = path.resolve(process.cwd(), 'data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  const localDbUrl = `file:${path.join(dataDir, 'listings.db')}`;
+  return new LibSqlDatabase(localDbUrl);
 }
 
 export const db: IDatabase = createDatabase();
