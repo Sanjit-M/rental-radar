@@ -83,8 +83,10 @@ describe('Adversarial Verification Suite — Milestone 2 UI & Geospatial Map', (
   describe('1. Leaflet Map & CartoDB Dark Matter Verification', () => {
     const mapViewContent = fs.readFileSync(path.join(rootDir, 'src/client/components/MapView.tsx'), 'utf8');
 
-    it('1.1 uses CartoDB Dark Matter tile layer with zero external API keys', () => {
-      expect(mapViewContent).toContain('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
+    it('1.1 uses free OpenStreetMap tile layer with zero external API keys (CartoDB requires paid key)', () => {
+      // CartoDB basemaps.cartocdn.com now requires a paid API key — switched to free OSM tiles
+      // with a CSS dark mode filter (invert + hue-rotate) to maintain dark theme
+      expect(mapViewContent).toContain('tile.openstreetmap.org');
       expect(mapViewContent).toContain('&copy; OpenStreetMap contributors &copy; CARTO');
       expect(mapViewContent).not.toMatch(/api_key|access_token|key=|token=/i);
     });

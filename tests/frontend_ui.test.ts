@@ -49,11 +49,14 @@ describe('Milestone 2 — Geospatial Map & Frontend UI Unit & Contract Tests', (
   });
 
   describe('4. Geospatial Map & Leaflet Tile Layer (R1 / Features F1–F4)', () => {
-    it('verifies MapView.tsx loads CartoDB Dark Matter tile layer without external API keys', () => {
+    it('verifies MapView.tsx loads a free tile layer without external API keys', () => {
       const mapViewPath = path.resolve(__dirname, '../src/client/components/MapView.tsx');
       const content = fs.readFileSync(mapViewPath, 'utf8');
 
-      expect(content).toContain('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
+      // CartoDB basemaps.cartocdn.com now requires a paid API key.
+      // Switched to free tile.openstreetmap.org with CSS dark mode filter.
+      expect(content).toContain('tile.openstreetmap.org');
+      expect(content).not.toMatch(/api_key|access_token|key=|token=/i);
       expect(content).toContain('Prestige Tech Park');
       expect(content).toContain('invalidateSize');
     });
