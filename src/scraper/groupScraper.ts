@@ -35,6 +35,7 @@ export const TARGET_FB_GROUPS = [
  * @param rawText - Raw post body text.
  * @param groupName - Name of the source group.
  * @param authorName - Author name or fallback.
+ * @param postedTime - When the post was published (e.g. "2h ago").
  * @param postUrl - Direct permalink URL.
  * @param fbPostIdOverride - Optional explicit FbPostId.
  * @param initialStatus - Initial pipeline tracking status.
@@ -43,7 +44,8 @@ export const TARGET_FB_GROUPS = [
 export async function processPost(
   rawText: string,
   groupName: string,
-  authorName: string = 'Facebook User',
+  authorName: string = 'Facebook Member',
+  postedTime: string = 'Recently',
   postUrl: string = '',
   fbPostIdOverride?: FbPostId,
   initialStatus: UserListingStatus = 'new'
@@ -79,6 +81,7 @@ export async function processPost(
     groupName,
     postUrl: postUrl || `https://facebook.com/groups/search/?q=${encodeURIComponent(location)}`,
     authorName,
+    postedTime,
     rawText: clean,
     location,
     bhkType,
@@ -105,6 +108,7 @@ export async function seedInitialData(): Promise<number> {
       item.text,
       item.groupName,
       item.authorName,
+      item.postedTime,
       item.postUrl,
       item.fbPostId as unknown as FbPostId,
       item.userStatus
@@ -133,8 +137,8 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
   if (!hasExistingSession()) {
     console.log('⚠️ No saved Facebook session profile found. Seeding realistic sample listings...');
     matchedCount = await seedInitialData();
-    const msg = 'No Facebook session in ~/.fb_rental_profile. Loaded realistic seed listings. Run `pnpm auth:setup` to activate live scraping.';
-    listingRepository.logScrapeRun('seed_loaded', SEED_POSTS.length, matchedCount, msg);
+    const msg = 'No Facebook session found. Loaded realistic seed listings. Run `pnpm auth` to authenticate your account.';
+    await listingRepository.logScrapeRun('seed_loaded', SEED_POSTS.length, matchedCount, msg);
     return { status: 'seed_loaded', scanned: SEED_POSTS.length, matched: matchedCount, message: msg };
   }
 
@@ -161,6 +165,27 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
             const text = await el.innerText();
             if (!text || text.trim().length < 35) continue;
 
+            // Extract Author Name
+            let authorName = 'Facebook Member';
+            const authorEl = await el.$('h2 strong, h3 strong, a[role="link"] > strong, span[dir="auto"] strong');
+            if (authorEl) {
+              const nameText = await authorEl.innerText();
+              if (nameText && nameText.trim().length > 1) {
+                authorName = nameText.trim();
+              }
+            }
+
+            // Extract Post Time
+            let postedTime = 'Recently';
+            const timeEl = await el.$('abbr, a[href*="/posts/"] span, a[href*="/permalink/"] span, span[id*="jsc_c"]');
+            if (timeEl) {
+              const timeText = await timeEl.innerText();
+              if (timeText && timeText.trim().length > 0) {
+                postedTime = timeText.trim();
+              }
+            }
+
+            // Extract Permalink
             let postUrl = '';
             const linkEl = await el.$('a[href*="/posts/"], a[href*="/permalink/"]');
             if (linkEl) {
@@ -168,7 +193,7 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
               if (href) postUrl = href.split('?')[0];
             }
 
-            const matched = await processPost(text, group.name, 'Facebook Member', postUrl);
+            const matched = await processPost(text, group.name, authorName, postedTime, postUrl);
             if (matched) matchedCount++;
           } catch {
             // Skip broken individual elements
@@ -181,11 +206,11 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
     }
 
     await context.close();
-    listingRepository.logScrapeRun('success', scannedCount, matchedCount);
+    await listingRepository.logScrapeRun('success', scannedCount, matchedCount);
     return { status: 'success', scanned: scannedCount, matched: matchedCount };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    listingRepository.logScrapeRun('error', scannedCount, matchedCount, message);
+    await listingRepository.logScrapeRun('error', scannedCount, matchedCount, message);
     return { status: 'error', error: message, scanned: scannedCount, matched: matchedCount };
   }
 }

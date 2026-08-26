@@ -1,113 +1,122 @@
-export interface SeedPost {
+import { UserListingStatus } from '../domain/types';
+
+export interface SeedPostFixture {
   fbPostId: string;
   groupName: string;
   authorName: string;
+  postedTime: string;
   postUrl: string;
   text: string;
-  userStatus: 'new' | 'interested' | 'called' | 'applied' | 'rejected';
+  userStatus: UserListingStatus;
 }
 
-export const SEED_POSTS: SeedPost[] = [
+export const SEED_POSTS: SeedPostFixture[] = [
   {
-    fbPostId: 'seed_sobha_iris_001',
+    fbPostId: 'fb_sobha_iris_01',
     groupName: 'Flat and Flatmates Bangalore',
-    authorName: 'Rohan Sharma',
-    postUrl: 'https://facebook.com/groups/flatandflatmatesbangalore/posts/9102831',
+    authorName: 'Rohan Deshmukh',
+    postedTime: '1 hr ago',
+    postUrl: 'https://facebook.com/groups/flatandflatmatesbangalore/posts/10158829102',
     text: `
-      Looking for a Male Flatmate in Sobha Iris, Kadubeesanahalli (Immediate Move-in).
-      Spacious master bedroom with attached washroom and dedicated road-facing balcony in a 3 BHK fully furnished apartment.
-      - Society: Sobha Iris (Gated society with swimming pool, gym, clubhouse, 100% DG power backup)
+      Looking for a Male flatmate in Sobha Iris, Kadubeesanahalli (Directly opposite Prestige Tech Park).
+      1 Master Bedroom available in a luxury 3 BHK gated community flat.
       - Rent: ₹22,000 / month (Maintenance included)
-      - Security Deposit: ₹45,000 (Low deposit deal)
-      - No Brokerage (Direct flatmate replacement)
-      - Location: Direct Kadubeesanahalli side, 3 mins scooter drive to Prestige Tech Park (PTP back gate).
-      Contact: +91 98450 12345
+      - Security Deposit: ₹45,000 (No Brokerage, directly replacing existing flatmate).
+      - Society Amenities: Full Swimming pool, gym, 100% DG power backup, clubhouse, 24/7 security.
+      - Room has attached private washroom and spacious balcony.
+      - Fully furnished with bed, AC, wardrobes, and modular kitchen with washing machine.
+      - Commute: 2 mins walk to PTP Back Gate!
+      Contact directly on WhatsApp/Call: +91 9845012345
     `,
     userStatus: 'interested',
   },
   {
-    fbPostId: 'seed_cessna_1bhk_002',
-    groupName: 'Bangalore Flatmates (Direct Owners)',
-    authorName: 'Vikram Patel',
-    postUrl: 'https://facebook.com/groups/bangaloreflatmates/posts/9102832',
+    fbPostId: 'fb_assetz_east_02',
+    groupName: 'Flats Without Brokers Bangalore',
+    authorName: 'Karthik S.',
+    postedTime: '2 hrs ago',
+    postUrl: 'https://facebook.com/groups/flatswithoutbrokerbangalore/posts/201948201',
     text: `
-      1 BHK Available for Rent near Prestige Tech Park, Kadubeesanahalli.
-      Semi-furnished 1 BHK in standalone building right behind Cessna Business Park.
-      - Rent: ₹18,500
-      - Deposit: ₹50,000
-      - Zero brokerage / direct owner post.
-      - Full 100% power backup, 2-wheeler covered parking.
-      - Commute: 5 mins scooter commute to PTP main gate.
-      Call/WhatsApp: 9880198765
+      1 Private Room in 2 BHK in Assetz East Point, Boganahalli / Kadubeesanahalli.
+      Zero Brokerage, Owner post.
+      - Rent: ₹24,500 per month
+      - Deposit: 2 months rent (₹49,000)
+      - Gated society with swimming pool, 100% power backup, tennis court.
+      - Attached bathroom, fully furnished flat.
+      - Very close to PTP & Cessna Business Park.
+      Looking for a working professional male.
+      Call: 9880198765
     `,
     userStatus: 'new',
   },
   {
-    fbPostId: 'seed_assetz_eastpoint_003',
-    groupName: 'Flats Without Brokers Bangalore',
-    authorName: 'Ankit Mehta',
-    postUrl: 'https://facebook.com/groups/flatswithoutbrokerbangalore/posts/9102833',
+    fbPostId: 'fb_orchid_lakeview_03',
+    groupName: 'Bangalore Flatmates',
+    authorName: 'Abhishek Roy',
+    postedTime: '3 hrs ago',
+    postUrl: 'https://facebook.com/groups/bangaloreflatmates/posts/301948291',
     text: `
-      Private Room in 2 BHK in Assetz East Point, Kadubeesanahalli.
-      Premium gated society with Olympic size swimming pool, badminton court & 100% generator power backup.
-      - Male flatmate needed.
-      - Fully furnished with AC, Smart TV, washing machine. Attached private bathroom.
-      - Rent: ₹26,000 / month
-      - Deposit: ₹60,000
-      - No Brokerage.
-      - Distance: 1.2 km from Prestige Tech Park (6 mins scooter ride).
-      Contact: 9742011223
+      Flatmate required in Goyal Orchid Lakeview, Kadubeesanahalli.
+      Semi-furnished room in 3 BHK.
+      - Rent: ₹25,000 / pm
+      - Deposit: ₹50k
+      - Gated community, swimming pool, power backup.
+      - Male flatmate preferred. No broker fee.
+      - Distance to PTP: 1.2 km (5 min scooter ride).
+      DM or call 9741234567
     `,
     userStatus: 'called',
   },
   {
-    fbPostId: 'seed_orchid_lakeview_004',
-    groupName: 'Flat and Flatmates Bangalore',
-    authorName: 'Karthik Reddy (Broker)',
-    postUrl: 'https://facebook.com/groups/flatandflatmatesbangalore/posts/9102834',
-    text: `
-      Luxury 2 BHK for rent in Goyal Orchid Lakeview, Kadubeesanahalli.
-      - Swimming pool, gym, 24/7 security.
-      - Rent: ₹36,000 / month
-      - Deposit: ₹1,50,000
-      - Brokerage applicable: 15 days broker fee.
-      - Fully furnished flat.
-      - Contact broker: 9900123456
-    `,
-    userStatus: 'rejected',
-  },
-  {
-    fbPostId: 'seed_prestige_sunnyside_005',
-    groupName: 'Bangalore Flatmates',
-    authorName: 'Aditya Rao',
-    postUrl: 'https://facebook.com/groups/bangaloreflatmates/posts/9102835',
-    text: `
-      Male Flatmate required for a pre-occupied 3 BHK in Prestige Sunnyside, Kadubeesanahalli.
-      - Gated community right next to PTP (Prestige Tech Park).
-      - Swimming pool, clubhouse, 100% power backup.
-      - Private room with attached washroom & spacious balcony.
-      - Rent: ₹24,500
-      - Deposit: ₹50,000
-      - No Brokerage.
-      - 2 mins walk / 1 min scooter to PTP!
-      WhatsApp: 9845112233
-    `,
-    userStatus: 'applied',
-  },
-  {
-    fbPostId: 'seed_panathur_road_006',
+    fbPostId: 'fb_stand_alone_1bhk_04',
     groupName: 'Flats and Flatmates Kadubeesanahalli',
-    authorName: 'Sumit Verma',
-    postUrl: 'https://facebook.com/groups/kadubeesanahalliflats/posts/9102836',
+    authorName: 'Venkatesh Rao (Owner)',
+    postedTime: '4 hrs ago',
+    postUrl: 'https://facebook.com/groups/kadubeesanahalliflats/posts/401928311',
     text: `
-      1 Room in 3 BHK in Panathur Road near PTP back gate.
-      - Semi-furnished flatmate vacancy for Male.
-      - Rent: ₹16,000 / month
+      1 BHK standalone building flat for rent in Kadubeesanahalli near PTP.
+      - Rent: ₹18,000 per month
       - Deposit: ₹40,000
-      - Zero brokerage.
-      - Note: Located on Panathur side across railway underpass (expect 15-20 min evening traffic across underpass).
-      Call: 9123456780
+      - Semi-furnished with cupboards, geyser, fan.
+      - Bike parking available, power backup for lights.
+      - Direct owner, no brokerage.
+      - Male bachelors or working professional welcome.
+      Call Owner: 9845112233
     `,
     userStatus: 'new',
+  },
+  {
+    fbPostId: 'fb_panathur_sobhacrest_05',
+    groupName: 'Bangalore Flatmates',
+    authorName: 'Deepak M.',
+    postedTime: '5 hrs ago',
+    postUrl: 'https://facebook.com/groups/bangaloreflatmates/posts/501938211',
+    text: `
+      Room available in Sobha Hibiscus, Panathur Road near PTP.
+      - Rent: ₹26,000 / month
+      - Deposit: ₹60,000
+      - Gated society, swimming pool, gym, 100% backup.
+      - Attached bath, fully furnished.
+      - Note: Commute involves Panathur railway underpass.
+      - No brokerage. Male flatmate.
+      Contact: 9811223344
+    `,
+    userStatus: 'new',
+  },
+  {
+    fbPostId: 'fb_broker_high_rent_06',
+    groupName: 'Flat and Flatmates Bangalore',
+    authorName: 'Suresh Real Estate',
+    postedTime: '6 hrs ago',
+    postUrl: 'https://facebook.com/groups/flatandflatmatesbangalore/posts/601948211',
+    text: `
+      Luxury 2 BHK in Kadubeesanahalli near PTP.
+      - Rent: ₹38,000 per month
+      - Deposit: ₹1,50,000
+      - Fully furnished, standalone building.
+      - Brokerage applicable: 1 month rent.
+      Contact broker: 9900112233
+    `,
+    userStatus: 'rejected',
   },
 ];

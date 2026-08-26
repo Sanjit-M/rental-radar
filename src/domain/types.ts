@@ -131,6 +131,7 @@ export interface RentalListing {
   readonly groupName: string;
   readonly postUrl: string;
   readonly authorName: string;
+  readonly postedTime: string;
   readonly rawText: string;
   readonly location: string;
   readonly bhkType: BHKType;

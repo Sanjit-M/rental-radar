@@ -1,4 +1,5 @@
 import { createClient, Client } from '@libsql/client';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 
@@ -10,6 +11,7 @@ CREATE TABLE IF NOT EXISTS listings (
   group_name TEXT NOT NULL,
   post_url TEXT NOT NULL,
   author_name TEXT NOT NULL,
+  posted_time TEXT NOT NULL DEFAULT 'Recently',
   raw_text TEXT NOT NULL,
   location TEXT NOT NULL,
   bhk_type TEXT NOT NULL,
@@ -74,7 +76,6 @@ class TursoDatabase implements IDatabase {
   }
 
   async initSchema(): Promise<void> {
-    // Execute DDL statements sequentially for Turso
     const statements = SCHEMA_SQL.split(';')
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
@@ -105,7 +106,7 @@ class TursoDatabase implements IDatabase {
 
 // 2. Local node:sqlite Client Implementation
 class LocalNodeDatabase implements IDatabase {
-  private dbInstance: any;
+  private dbInstance: DatabaseSync;
 
   constructor() {
     const dataDir = path.resolve(process.cwd(), 'data');
@@ -113,12 +114,13 @@ class LocalNodeDatabase implements IDatabase {
       fs.mkdirSync(dataDir, { recursive: true });
     }
     const dbPath = path.join(dataDir, 'listings.db');
-
-    // Dynamic require/import for node:sqlite
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { DatabaseSync } = require('node:sqlite');
     this.dbInstance = new DatabaseSync(dbPath);
     this.dbInstance.exec(SCHEMA_SQL);
+    try {
+      this.dbInstance.exec("ALTER TABLE listings ADD COLUMN posted_time TEXT NOT NULL DEFAULT 'Recently';");
+    } catch {
+      // Column already exists
+    }
   }
 
   isTurso(): boolean {

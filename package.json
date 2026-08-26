@@ -9,6 +9,7 @@
     "server": "tsx src/server/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "auth": "tsx src/scraper/authSetup.ts",
     "auth:setup": "tsx src/scraper/authSetup.ts",
     "auth:export": "tsx src/scraper/exportSession.ts",
     "scrape": "tsx src/scraper/cli.ts"

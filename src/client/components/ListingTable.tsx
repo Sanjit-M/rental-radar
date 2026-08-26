@@ -1,7 +1,7 @@
 import React from 'react';
 import { RentalListing, UserListingStatus } from '../../domain/types';
 import { RatingBadge } from './RatingBadge';
-import { ExternalLink, MessageCircle, Phone, Building2, Waves, Zap } from 'lucide-react';
+import { ExternalLink, MessageCircle, Phone, Building2, Waves, Zap, User, Clock } from 'lucide-react';
 
 interface ListingTableProps {
   listings: RentalListing[];
@@ -21,10 +21,11 @@ export const ListingTable: React.FC<ListingTableProps> = ({
           <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-800">
             <tr>
               <th className="py-3 px-4">Score</th>
-              <th className="py-3 px-4">Society / Location</th>
+              <th className="py-3 px-4">Author / Posted</th>
+              <th className="py-3 px-4">Society / Locality</th>
               <th className="py-3 px-4">Type</th>
               <th className="py-3 px-4">Rent</th>
-              <th className="py-3 px-4">Deposit</th>
+              <th className="py-3 px-4">Phone</th>
               <th className="py-3 px-4">Brokerage</th>
               <th className="py-3 px-4">Peak Commute</th>
               <th className="py-3 px-4">Amenities</th>
@@ -45,9 +46,20 @@ export const ListingTable: React.FC<ListingTableProps> = ({
                     />
                   </td>
 
+                  <td className="py-3 px-4 whitespace-nowrap">
+                    <div className="font-semibold text-white flex items-center gap-1.5">
+                      <User className="w-3 h-3 text-indigo-400" />
+                      {l.authorName}
+                    </div>
+                    <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                      <Clock className="w-2.5 h-2.5 text-cyan-400" />
+                      {l.postedTime}
+                    </div>
+                  </td>
+
                   <td className="py-3 px-4 font-medium text-white">
                     <div>{e.societyName || l.location}</div>
-                    <div className="text-[10px] text-slate-400 font-normal truncate max-w-[160px]">
+                    <div className="text-[10px] text-slate-400 font-normal truncate max-w-[140px]">
                       {l.groupName}
                     </div>
                   </td>
@@ -62,8 +74,8 @@ export const ListingTable: React.FC<ListingTableProps> = ({
                     {e.rent ? `₹${e.rent.toLocaleString('en-IN')}` : '—'}
                   </td>
 
-                  <td className="py-3 px-4 whitespace-nowrap font-mono text-slate-400">
-                    {e.deposit ? `₹${e.deposit.toLocaleString('en-IN')}` : '—'}
+                  <td className="py-3 px-4 whitespace-nowrap font-mono text-cyan-300">
+                    {e.contactPhone ? `+91 ${e.contactPhone}` : '—'}
                   </td>
 
                   <td className="py-3 px-4 whitespace-nowrap">
@@ -113,7 +125,11 @@ export const ListingTable: React.FC<ListingTableProps> = ({
                       {e.contactPhone && (
                         <>
                           <a
-                            href={`https://wa.me/91${e.contactPhone}`}
+                            href={`https://wa.me/91${e.contactPhone}?text=Hi%20${encodeURIComponent(
+                              l.authorName
+                            )}%2C%20saw%20your%20rental%20post%20for%20${encodeURIComponent(
+                              e.societyName || l.location
+                            )}%20near%20PTP.`}
                             target="_blank"
                             rel="noreferrer"
                             className="p-1 rounded bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40"

@@ -34,6 +34,7 @@ interface RawDatabaseRow {
   group_name: string;
   post_url: string;
   author_name: string;
+  posted_time: string;
   raw_text: string;
   location: string;
   bhk_type: string;
@@ -114,7 +115,8 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
     fbPostId,
     groupName: row.group_name,
     postUrl: row.post_url,
-    authorName: row.author_name,
+    authorName: row.author_name || 'Facebook Member',
+    postedTime: row.posted_time || 'Recently',
     rawText: row.raw_text,
     location: row.location,
     bhkType: row.bhk_type as BHKType,
@@ -147,7 +149,7 @@ export const listingRepository = {
   async upsertListing(listing: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'>): Promise<RentalListing> {
     const upsertSql = `
       INSERT INTO listings (
-        fb_post_id, group_name, post_url, author_name, raw_text,
+        fb_post_id, group_name, post_url, author_name, posted_time, raw_text,
         location, bhk_type, rent, deposit, is_brokerage,
         is_gated_society, society_name, has_swimming_pool,
         has_power_backup, has_attached_washroom, has_balcony,
@@ -156,7 +158,7 @@ export const listingRepository = {
         has_panathur_underpass_bottleneck, score, score_breakdown, tier,
         user_status, updated_at
       ) VALUES (
-        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
@@ -166,6 +168,8 @@ export const listingRepository = {
         ?, datetime('now')
       )
       ON CONFLICT(fb_post_id) DO UPDATE SET
+        author_name=excluded.author_name,
+        posted_time=excluded.posted_time,
         rent=excluded.rent,
         deposit=excluded.deposit,
         score=excluded.score,
@@ -182,6 +186,7 @@ export const listingRepository = {
       listing.groupName,
       listing.postUrl,
       listing.authorName,
+      listing.postedTime || 'Recently',
       listing.rawText,
       listing.location,
       listing.bhkType,
@@ -249,9 +254,9 @@ export const listingRepository = {
     }
 
     if (options.search) {
-      sql += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ?)';
+      sql += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
       const term = `%${options.search}%`;
-      params.push(term, term, term);
+      params.push(term, term, term, term, term);
     }
 
     switch (options.sortBy) {

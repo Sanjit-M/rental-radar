@@ -10,8 +10,8 @@ import {
   ExternalLink,
   Phone,
   MessageCircle,
-  ShieldCheck,
-  Check,
+  Clock,
+  User,
 } from 'lucide-react';
 
 interface ListingCardProps {
@@ -46,6 +46,18 @@ export const ListingCard: React.FC<ListingCardProps> = ({
     <div className="glass-panel glass-panel-hover p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group">
       {/* Top Banner & Badges */}
       <div>
+        {/* Author & Post Time Header */}
+        <div className="flex items-center justify-between text-xs text-slate-400 pb-2.5 mb-3 border-b border-slate-800/60">
+          <div className="flex items-center gap-1.5 font-medium text-slate-300 truncate max-w-[180px]">
+            <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span className="truncate">{listing.authorName}</span>
+          </div>
+          <div className="flex items-center gap-1 text-[11px] text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-800 shrink-0">
+            <Clock className="w-3 h-3 text-cyan-400" />
+            <span>{listing.postedTime}</span>
+          </div>
+        </div>
+
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
             <div className="flex items-center gap-2">
@@ -134,6 +146,19 @@ export const ListingCard: React.FC<ListingCardProps> = ({
         <p className="text-xs text-slate-400 line-clamp-2 italic mb-4">
           "{listing.rawText}"
         </p>
+
+        {/* Phone Number Banner if Available */}
+        {e.contactPhone && (
+          <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 px-3 py-2 rounded-xl mb-4 text-xs">
+            <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+              <Phone className="w-3.5 h-3.5 text-cyan-400" />
+              Phone:
+            </span>
+            <span className="font-mono font-bold text-white tracking-wider">
+              +91 {e.contactPhone}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Card Footer: Status and Direct Action Buttons */}
@@ -158,20 +183,22 @@ export const ListingCard: React.FC<ListingCardProps> = ({
           {e.contactPhone && (
             <>
               <a
-                href={`https://wa.me/91${e.contactPhone}?text=Hi%2C%20saw%20your%20rental%20post%20for%20${encodeURIComponent(
+                href={`https://wa.me/91${e.contactPhone}?text=Hi%20${encodeURIComponent(
+                  listing.authorName
+                )}%2C%20saw%20your%20rental%20post%20for%20${encodeURIComponent(
                   e.societyName || listing.location
                 )}%20near%20PTP.%20Is%20it%20available%3F`}
                 target="_blank"
                 rel="noreferrer"
                 className="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 transition-colors"
-                title="Message on WhatsApp"
+                title={`WhatsApp ${listing.authorName}`}
               >
                 <MessageCircle className="w-4 h-4" />
               </a>
               <a
                 href={`tel:${e.contactPhone}`}
                 className="p-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-400 border border-cyan-500/30 transition-colors"
-                title="Call Owner"
+                title={`Call ${listing.authorName}`}
               >
                 <Phone className="w-4 h-4" />
               </a>
