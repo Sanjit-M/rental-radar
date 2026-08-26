@@ -5,7 +5,7 @@ export const PTP_COORDINATES = {
   lon: 77.6917,
 };
 
-// Known Gated Societies with verified attributes
+// Known Gated Societies with verified attributes & coordinates for Leaflet OpenStreetMap
 export interface KnownSociety {
   name: string;
   hasPool: boolean;
@@ -187,13 +187,18 @@ export const SCORING_CONFIG = {
   rent25kTo30k: 0,
   rentGt30k: -20,
   noBrokerage: 15,
-  brokerageApplicable: -25,
+  brokerageApplicable: -30,       // Strict brokerage penalty
   lowDeposit: 10,
-  highDeposit: -10,
+  highDepositRatioPenalty: -15,   // > 2.2x monthly rent penalty
   gatedSociety: 15,
   swimmingPool: 15,
   powerBackup: 10,
   attachedWashroom: 10,
+  sharedWashroomPenalty: -5,      // Shared washroom penalty
+  vegetarianOnlyPenalty: -50,     // Strict -50pt vegetarian penalty
+  bachelorMaleMatch: 10,          // Bachelor male match
+  bachelorMismatchPenalty: -25,   // Strictly female only
+  walkingProximityBonus: 15,      // < 500m walking bonus
   furnished: 5,
   panathurBypassBonus: 10,
   commuteLe7min: 20,

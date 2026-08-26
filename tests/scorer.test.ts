@@ -14,16 +14,20 @@ describe('Rating & Scorer Engine (Branded Types & Pure Domain)', () => {
       hasPowerBackup: true,
       hasAttachedWashroom: true,
       hasBalcony: true,
+      isVegetarianOnly: false,
+      isMaleBachelorAllowed: true,
+      isFemaleOnly: false,
+      isWalkingDistance: true,
       furnishing: 'Fully Furnished',
       isKadubeesanahalliDirect: true,
       contactPhone: '9845012345',
     };
 
     const commute: CommuteWindow = {
-      distanceKm: makeKilometers(0.8),
+      distanceKm: makeKilometers(0.4),
       inboundMins: makeMinutes(3),
-      outboundMins: makeMinutes(5),
-      twoWayAvgPeakMins: makeMinutes(4),
+      outboundMins: makeMinutes(3),
+      twoWayAvgPeakMins: makeMinutes(3),
       hasPanathurUnderpassBottleneck: false,
     };
 
@@ -34,10 +38,11 @@ describe('Rating & Scorer Engine (Branded Types & Pure Domain)', () => {
     expect(breakdown.brokerage).toBe(15);
     expect(breakdown.gatedSociety).toBe(15);
     expect(breakdown.swimmingPool).toBe(15);
+    expect(breakdown.walkProximity).toBe(15);
     expect(breakdown.commute).toBe(20);
   });
 
-  it('penalizes high rent (>30k), broker fees, high deposit, and long commute', () => {
+  it('penalizes high rent (>30k), broker fees (-30), high deposit ratio (>2.2x), and long commute', () => {
     const entities: ExtractedEntities = {
       rent: makeINR(38000),
       deposit: makeINR(150000),
@@ -48,6 +53,10 @@ describe('Rating & Scorer Engine (Branded Types & Pure Domain)', () => {
       hasPowerBackup: false,
       hasAttachedWashroom: false,
       hasBalcony: false,
+      isVegetarianOnly: false,
+      isMaleBachelorAllowed: true,
+      isFemaleOnly: false,
+      isWalkingDistance: false,
       furnishing: 'Unfurnished',
       isKadubeesanahalliDirect: false,
       contactPhone: '9900112233',
@@ -65,8 +74,42 @@ describe('Rating & Scorer Engine (Branded Types & Pure Domain)', () => {
     expect(score).toBeLessThan(50);
     expect(tier).toBe('⚠️ Low Match');
     expect(breakdown.rent).toBe(-20);
-    expect(breakdown.brokerage).toBe(-25);
-    expect(breakdown.deposit).toBe(-10);
+    expect(breakdown.brokerage).toBe(-30);
+    expect(breakdown.deposit).toBe(-15);
+    expect(breakdown.attachedWashroom).toBe(-5);
     expect(breakdown.commute).toBe(-25);
+  });
+
+  it('applies strict -50 point penalty for vegetarian-only restrictions', () => {
+    const entities: ExtractedEntities = {
+      rent: makeINR(20000),
+      deposit: makeINR(40000),
+      isBrokerage: false,
+      isGatedSociety: true,
+      societyName: 'Sobha Iris',
+      hasSwimmingPool: true,
+      hasPowerBackup: true,
+      hasAttachedWashroom: true,
+      hasBalcony: true,
+      isVegetarianOnly: true,
+      isMaleBachelorAllowed: true,
+      isFemaleOnly: false,
+      isWalkingDistance: true,
+      furnishing: 'Fully Furnished',
+      isKadubeesanahalliDirect: true,
+      contactPhone: '9845012345',
+    };
+
+    const commute: CommuteWindow = {
+      distanceKm: makeKilometers(0.4),
+      inboundMins: makeMinutes(3),
+      outboundMins: makeMinutes(3),
+      twoWayAvgPeakMins: makeMinutes(3),
+      hasPanathurUnderpassBottleneck: false,
+    };
+
+    const { score, breakdown } = computeListingScore(entities, commute);
+    expect(breakdown.vegetarianPenalty).toBe(-50);
+    expect(score).toBeLessThan(90);
   });
 });

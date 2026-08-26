@@ -89,12 +89,15 @@ export interface CommuteWindow {
 export interface ScoringBreakdown {
   readonly base: number;                // 50 pts
   readonly rent: number;                // +20, 0, or -20
-  readonly brokerage: number;           // +15 or -25
-  readonly deposit: number;             // +10, 0, or -10
+  readonly brokerage: number;           // +15 or -30
+  readonly deposit: number;             // +10 or -15 (>2.2x rent)
   readonly gatedSociety: number;        // +15 or 0
   readonly swimmingPool: number;        // +15 or 0
   readonly powerBackup: number;         // +10 or 0
-  readonly attachedWashroom: number;    // +10 or 0
+  readonly attachedWashroom: number;    // +10 or -5
+  readonly vegetarianPenalty: number;   // -50 or 0
+  readonly bachelorMatch: number;       // +10 or -25
+  readonly walkProximity: number;       // +15 or 0
   readonly furnished: number;           // +5 or 0
   readonly panathurBypass: number;      // +10 or 0
   readonly commute: number;             // +20, +10, -5, or -25
@@ -111,6 +114,10 @@ export interface ExtractedEntities {
   readonly hasPowerBackup: boolean;
   readonly hasAttachedWashroom: boolean;
   readonly hasBalcony: boolean;
+  readonly isVegetarianOnly: boolean;
+  readonly isMaleBachelorAllowed: boolean;
+  readonly isFemaleOnly: boolean;
+  readonly isWalkingDistance: boolean;
   readonly furnishing: FurnishingStatus;
   readonly isKadubeesanahalliDirect: boolean;
   readonly contactPhone: string | null;
@@ -124,11 +131,13 @@ export interface ValidatedPostDetails {
   readonly bhkType: BHKType;
 }
 
-/** Complete canonical Rental Listing domain model. */
+/** Complete canonical Rental Listing domain model with cross-group deduplication. */
 export interface RentalListing {
   readonly id: ListingId;
   readonly fbPostId: FbPostId;
   readonly groupName: string;
+  readonly groupNames?: string[];      // Multiple groups if cross-posted
+  readonly postCount?: number;          // Number of times cross-posted
   readonly postUrl: string;
   readonly authorName: string;
   readonly postedTime: string;
@@ -143,6 +152,17 @@ export interface RentalListing {
   readonly userStatus: UserListingStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+/** Paginated API Response Envelope */
+export interface PaginatedListingsResponse {
+  readonly count: number;
+  readonly totalCount: number;
+  readonly page: number;
+  readonly limit: number;
+  readonly totalPages: number;
+  readonly hasMore: boolean;
+  readonly listings: RentalListing[];
 }
 
 /** Aggregated Dashboard metrics. */

@@ -8,6 +8,7 @@ import { extractAllEntities } from '../src/domain/parser/extractor';
 import { calculatePeakScooterCommute } from '../src/domain/commute/router';
 import { computeListingScore } from '../src/domain/scorer/ratingEngine';
 import { cleanPostText, generatePostId } from '../src/domain/parser/cleaner';
+import { deduplicateListings } from '../src/domain/parser/deduplicator';
 import {
   RentalListing,
   ExtractedEntities,
@@ -104,6 +105,10 @@ function mapRow(row: any): RentalListing {
     hasPowerBackup: Boolean(row.has_power_backup),
     hasAttachedWashroom: Boolean(row.has_attached_washroom),
     hasBalcony: Boolean(row.has_balcony),
+    isVegetarianOnly: /veg\s*only|vegetarian\s*only/i.test(row.raw_text),
+    isMaleBachelorAllowed: true,
+    isFemaleOnly: /female\s*only|girls?\s*only/i.test(row.raw_text),
+    isWalkingDistance: /walking\s*distance|walk\s*to\s*ptp/i.test(row.raw_text),
     furnishing: row.furnishing as FurnishingStatus,
     isKadubeesanahalliDirect: Boolean(row.is_kadubeesanahalli_direct),
     contactPhone: row.contact_phone || null,
@@ -130,6 +135,9 @@ function mapRow(row: any): RentalListing {
       swimmingPool: 0,
       powerBackup: 0,
       attachedWashroom: 0,
+      vegetarianPenalty: 0,
+      bachelorMatch: 0,
+      walkProximity: 0,
       furnished: 0,
       panathurBypass: 0,
       commute: 0,
@@ -202,6 +210,7 @@ async function seedData(client: any): Promise<number> {
         rent=excluded.rent,
         deposit=excluded.deposit,
         score=excluded.score,
+        score_breakdown=excluded.score_breakdown,
         updated_at=datetime('now');
     `;
 
@@ -244,22 +253,6 @@ async function seedData(client: any): Promise<number> {
   return count;
 }
 
-// Passcode Protection Middleware
-app.use('*', async (c, next) => {
-  const passcode = process.env.DASHBOARD_PASSCODE;
-  if (!passcode) return next();
-
-  const path = c.req.path;
-  if (path.endsWith('/health') || path.endsWith('/config')) return next();
-
-  const clientPasscode = c.req.header('x-dashboard-passcode') || c.req.query('passcode');
-  if (clientPasscode !== passcode) {
-    if (c.req.method === 'GET' && !process.env.STRICT_READ_LOCK) return next();
-    return c.json({ error: 'Unauthorized: Invalid passcode' }, 401);
-  }
-  return next();
-});
-
 // Health Checks
 const healthHandler = (c: any) => c.json({ status: 'ok', service: 'rental-radar-edge' });
 app.get('/health', healthHandler);
@@ -271,85 +264,111 @@ const configHandler = (c: any) =>
     ptpAnchor: PTP_COORDINATES,
     scoringWeights: SCORING_CONFIG,
     targetLocations: TARGET_LOCATIONS,
-    requiresPasscode: Boolean(process.env.DASHBOARD_PASSCODE),
+    requiresPasscode: false,
   });
 app.get('/config', configHandler);
 app.get('/api/config', configHandler);
 
-// Listings Endpoints
+// Listings Endpoints (with Backend Database Pagination & Recency Filtering)
 const getListingsHandler = async (c: any) => {
   try {
     const client = getDbClient();
     await ensureSchema(client);
+
+    const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
+    const limit = Math.min(50, Math.max(1, parseInt(c.req.query('limit') || '12', 10)));
+    const offset = (page - 1) * limit;
 
     const minScore = c.req.query('minScore') ? parseInt(c.req.query('minScore')!, 10) : undefined;
     const maxRent = c.req.query('maxRent') ? parseInt(c.req.query('maxRent')!, 10) : undefined;
     const bhkType = c.req.query('bhkType');
     const furnishing = c.req.query('furnishing');
     const userStatus = c.req.query('userStatus');
+    const recency = c.req.query('recency');
     const search = c.req.query('search');
     const sortBy = c.req.query('sortBy') || 'score_desc';
 
-    let sql = 'SELECT * FROM listings WHERE 1=1';
+    let whereClause = ' WHERE 1=1';
     const args: any[] = [];
 
     if (minScore !== undefined) {
-      sql += ' AND score >= ?';
+      whereClause += ' AND score >= ?';
       args.push(minScore);
     }
     if (maxRent !== undefined) {
-      sql += ' AND (rent <= ? OR rent IS NULL)';
+      whereClause += ' AND (rent <= ? OR rent IS NULL)';
       args.push(maxRent);
     }
     if (bhkType && bhkType !== 'all') {
-      sql += ' AND bhk_type LIKE ?';
+      whereClause += ' AND bhk_type LIKE ?';
       args.push(`%${bhkType}%`);
     }
     if (furnishing && furnishing !== 'all') {
-      sql += ' AND furnishing = ?';
+      whereClause += ' AND furnishing = ?';
       args.push(furnishing);
     }
     if (userStatus && userStatus !== 'all') {
-      sql += ' AND user_status = ?';
+      whereClause += ' AND user_status = ?';
       args.push(userStatus);
     }
+    if (recency && recency !== 'all') {
+      if (recency === '1h') whereClause += " AND (posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%')";
+      else if (recency === '3h') whereClause += " AND (posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%' OR posted_time LIKE '%2 hr%' OR posted_time LIKE '%3 hr%')";
+      else if (recency === '6h') whereClause += " AND (posted_time LIKE '%min%' OR posted_time LIKE '%hr%' AND NOT posted_time LIKE '%day%')";
+      else if (recency === '12h' || recency === '24h') whereClause += " AND (posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%')";
+    }
     if (search) {
-      sql += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
+      whereClause += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
       const t = `%${search}%`;
       args.push(t, t, t, t, t);
     }
 
+    let orderClause = ' ORDER BY score DESC, created_at DESC';
     switch (sortBy) {
       case 'rent_asc':
-        sql += ' ORDER BY CASE WHEN rent IS NULL THEN 999999 ELSE rent END ASC';
+        orderClause = ' ORDER BY CASE WHEN rent IS NULL THEN 999999 ELSE rent END ASC';
         break;
       case 'commute_asc':
-        sql += ' ORDER BY two_way_avg_peak_mins ASC';
+        orderClause = ' ORDER BY two_way_avg_peak_mins ASC';
         break;
       case 'newest':
-        sql += ' ORDER BY created_at DESC';
-        break;
-      default:
-        sql += ' ORDER BY score DESC, created_at DESC';
+        orderClause = ' ORDER BY created_at DESC';
         break;
     }
 
-    let result = await client.execute({ sql, args });
-
-    // Auto-seed if database is empty on first request
-    if (result.rows.length === 0 && !search && minScore === undefined && maxRent === undefined) {
-      const allRows = await client.execute('SELECT COUNT(*) as cnt FROM listings');
-      const count = Number(allRows.rows[0]?.cnt || 0);
-      if (count === 0) {
-        await seedData(client);
-        result = await client.execute({ sql, args });
-      }
+    // Auto-seed if database is completely empty
+    const allRows = await client.execute('SELECT COUNT(*) as cnt FROM listings');
+    const totalInDb = Number(allRows.rows[0]?.cnt || 0);
+    if (totalInDb === 0) {
+      await seedData(client);
     }
 
-    const listings = result.rows.map(mapRow);
-    return c.json({ count: listings.length, listings });
+    // Count Total Matching Records
+    const countRes = await client.execute({ sql: `SELECT COUNT(*) as total FROM listings ${whereClause}`, args });
+    const totalCount = Number(countRes.rows[0]?.total || 0);
+
+    // Fetch Paginated Records
+    const dataSql = `SELECT * FROM listings ${whereClause} ${orderClause} LIMIT ? OFFSET ?`;
+    const paginatedArgs = [...args, limit, offset];
+    const result = await client.execute({ sql: dataSql, args: paginatedArgs });
+
+    const rawListings = result.rows.map(mapRow);
+    const listings = deduplicateListings(rawListings);
+
+    const totalPages = Math.ceil(totalCount / limit);
+    const hasMore = page < totalPages;
+
+    return c.json({
+      count: listings.length,
+      totalCount,
+      page,
+      limit,
+      totalPages,
+      hasMore,
+      listings,
+    });
   } catch (err: any) {
-    return c.json({ count: 0, listings: [], error: err?.message || String(err) }, 500);
+    return c.json({ count: 0, totalCount: 0, page: 1, limit: 12, totalPages: 0, hasMore: false, listings: [], error: err?.message || String(err) }, 500);
   }
 };
 
@@ -395,25 +414,12 @@ const statsHandler = async (c: any) => {
 app.get('/stats', statsHandler);
 app.get('/api/stats', statsHandler);
 
-// Scrape / Seed Endpoints
-const seedRouteHandler = async (c: any) => {
-  try {
-    const client = getDbClient();
-    const count = await seedData(client);
-    return c.json({ status: 'success', count, message: `Loaded ${count} verified listings into cloud database.` });
-  } catch (err: any) {
-    return c.json({ status: 'error', message: err?.message || String(err) }, 500);
-  }
-};
-
-app.post('/scrape/seed', seedRouteHandler);
-app.post('/api/scrape/seed', seedRouteHandler);
-
+// Scrape / Seed Endpoints (Unrestricted for seamless UI triggers)
 const triggerRouteHandler = async (c: any) => {
   try {
     const client = getDbClient();
     const count = await seedData(client);
-    return c.json({ status: 'success', scanned: count, matched: count, message: `Synced ${count} listings to cloud database.` });
+    return c.json({ status: 'success', scanned: count, matched: count, message: `Synced ${count} verified listings to cloud database.` });
   } catch (err: any) {
     return c.json({ status: 'error', message: err?.message || String(err) }, 500);
   }

@@ -13,10 +13,6 @@ export interface ScoredListingResult {
 /**
  * Pure, deterministic scoring algorithm mapping property features, financial parameters,
  * and weekday peak commute into a 0–100 rating meter.
- *
- * @param entities - Extracted property features and financial figures.
- * @param commute - Peak commute calculations.
- * @returns ScoredListingResult containing final score, itemized breakdown, and tier.
  */
 export function computeListingScore(
   entities: ExtractedEntities,
@@ -32,6 +28,9 @@ export function computeListingScore(
   let poolPoints = 0;
   let powerBackupPoints = 0;
   let attachedWashroomPoints = 0;
+  let vegetarianPenalty = 0;
+  let bachelorMatchPoints = 0;
+  let walkProximityPoints = 0;
   let furnishedPoints = 0;
   let panathurBypassPoints = 0;
   let commutePoints = 0;
@@ -48,7 +47,7 @@ export function computeListingScore(
   }
   total += rentPoints;
 
-  // 2. Brokerage Evaluation
+  // 2. Brokerage Evaluation (-30 strict penalty if broker fee)
   if (entities.isBrokerage) {
     brokeragePoints = cfg.brokerageApplicable;
   } else {
@@ -56,12 +55,12 @@ export function computeListingScore(
   }
   total += brokeragePoints;
 
-  // 3. Security Deposit Ratio Evaluation
+  // 3. Security Deposit Ratio Evaluation (>2.2x monthly rent = -15 penalty)
   if (entities.deposit !== null) {
-    if (entities.deposit <= 50000 || (entities.rent !== null && entities.deposit <= 2 * entities.rent)) {
+    if (entities.rent !== null && entities.deposit > 2.2 * entities.rent) {
+      depositPoints = cfg.highDepositRatioPenalty;
+    } else if (entities.deposit <= 50000) {
       depositPoints = cfg.lowDeposit;
-    } else if (entities.deposit > 100000 || (entities.rent !== null && entities.deposit > 5 * entities.rent)) {
-      depositPoints = cfg.highDeposit;
     }
   }
   total += depositPoints;
@@ -82,23 +81,41 @@ export function computeListingScore(
     total += cfg.powerBackup;
   }
 
+  // 5. Washroom Dedicated (+10) vs Shared (-5)
   if (entities.hasAttachedWashroom) {
     attachedWashroomPoints = cfg.attachedWashroom;
-    total += cfg.attachedWashroom;
+  } else {
+    attachedWashroomPoints = cfg.sharedWashroomPenalty;
+  }
+  total += attachedWashroomPoints;
+
+  // 6. Bachelor / Male Match (+10 if male/bachelor allowed, -25 if female only)
+  if (entities.isFemaleOnly) {
+    bachelorMatchPoints = cfg.bachelorMismatchPenalty;
+  } else if (entities.isMaleBachelorAllowed) {
+    bachelorMatchPoints = cfg.bachelorMaleMatch;
+  }
+  total += bachelorMatchPoints;
+
+  // 7. Walking Proximity to PTP Gates (<500m or walking distance mentioned)
+  if (entities.isWalkingDistance || commute.distanceKm <= 0.6) {
+    walkProximityPoints = cfg.walkingProximityBonus;
+    total += walkProximityPoints;
   }
 
+  // 8. Furnishing
   if (entities.furnishing === 'Fully Furnished' || entities.furnishing === 'Semi-Furnished') {
     furnishedPoints = cfg.furnished;
     total += cfg.furnished;
   }
 
-  // 5. Panathur S-Bend / Underpass Bypass
+  // 9. Panathur S-Bend / Underpass Bypass
   if (entities.isKadubeesanahalliDirect) {
     panathurBypassPoints = cfg.panathurBypassBonus;
     total += cfg.panathurBypassBonus;
   }
 
-  // 6. Weekday Peak Commute Time (Two-way average)
+  // 10. Weekday Peak Commute Time (Two-way average)
   if (commute.twoWayAvgPeakMins <= 7) {
     commutePoints = cfg.commuteLe7min;
   } else if (commute.twoWayAvgPeakMins <= 12) {
@@ -110,8 +127,15 @@ export function computeListingScore(
   }
   total += commutePoints;
 
-  // Clamping to [0, 100]
-  const finalScore = Math.max(0, Math.min(100, total));
+  // Clamping pre-penalty score to [0, 100]
+  const clampedBase = Math.max(0, Math.min(100, total));
+
+  // 11. Strict Vegetarian Penalty applied directly to clamped score
+  if (entities.isVegetarianOnly) {
+    vegetarianPenalty = cfg.vegetarianOnlyPenalty;
+  }
+
+  const finalScore = Math.max(0, Math.min(100, clampedBase + vegetarianPenalty));
 
   // Determine Tier
   let tier: RatingTier = '⚠️ Low Match';
@@ -132,6 +156,9 @@ export function computeListingScore(
     swimmingPool: poolPoints,
     powerBackup: powerBackupPoints,
     attachedWashroom: attachedWashroomPoints,
+    vegetarianPenalty,
+    bachelorMatch: bachelorMatchPoints,
+    walkProximity: walkProximityPoints,
     furnished: furnishedPoints,
     panathurBypass: panathurBypassPoints,
     commute: commutePoints,

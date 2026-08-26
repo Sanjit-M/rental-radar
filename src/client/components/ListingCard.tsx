@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { RentalListing, UserListingStatus } from '../../domain/types';
 import { RatingBadge } from './RatingBadge';
 import { CommutePill } from './CommutePill';
@@ -12,19 +12,27 @@ import {
   MessageCircle,
   Clock,
   User,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  Leaf,
 } from 'lucide-react';
 
 interface ListingCardProps {
   listing: RentalListing;
   onStatusChange: (id: number, status: UserListingStatus) => void;
   onOpenScoreModal: (listing: RentalListing) => void;
+  onFocusMap?: (listing: RentalListing) => void;
 }
 
 export const ListingCard: React.FC<ListingCardProps> = ({
   listing,
   onStatusChange,
   onOpenScoreModal,
+  onFocusMap,
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
   const e = listing.entities;
 
   const getStatusColor = (status: UserListingStatus) => {
@@ -48,13 +56,25 @@ export const ListingCard: React.FC<ListingCardProps> = ({
       <div>
         {/* Author & Post Time Header */}
         <div className="flex items-center justify-between text-xs text-slate-400 pb-2.5 mb-3 border-b border-slate-800/60">
-          <div className="flex items-center gap-1.5 font-medium text-slate-300 truncate max-w-[180px]">
+          <div className="flex items-center gap-1.5 font-medium text-slate-300 truncate max-w-[170px]">
             <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
             <span className="truncate">{listing.authorName}</span>
           </div>
-          <div className="flex items-center gap-1 text-[11px] text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-800 shrink-0">
-            <Clock className="w-3 h-3 text-cyan-400" />
-            <span>{listing.postedTime}</span>
+
+          <div className="flex items-center gap-1.5">
+            {listing.postCount && listing.postCount > 1 && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded-full"
+                title={`Cross-posted in: ${(listing.groupNames || []).join(', ')}`}
+              >
+                <Layers className="w-2.5 h-2.5" /> {listing.postCount} groups
+              </span>
+            )}
+
+            <div className="flex items-center gap-1 text-[11px] text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-800 shrink-0">
+              <Clock className="w-3 h-3 text-cyan-400" />
+              <span>{listing.postedTime}</span>
+            </div>
           </div>
         </div>
 
@@ -111,6 +131,12 @@ export const ListingCard: React.FC<ListingCardProps> = ({
             </span>
           )}
 
+          {e.isVegetarianOnly && (
+            <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-amber-950/50 text-amber-300 border border-amber-500/40 font-medium">
+              <Leaf className="w-3 h-3" /> Veg Only (-50)
+            </span>
+          )}
+
           {e.isGatedSociety && (
             <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-indigo-950/40 text-indigo-300 border border-indigo-500/30">
               <Building2 className="w-3 h-3" /> Gated
@@ -129,9 +155,13 @@ export const ListingCard: React.FC<ListingCardProps> = ({
             </span>
           )}
 
-          {e.hasAttachedWashroom && (
+          {e.hasAttachedWashroom ? (
             <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-teal-950/40 text-teal-300 border border-teal-500/30">
               <Bath className="w-3 h-3" /> Attached Bath
+            </span>
+          ) : (
+            <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700">
+              Shared Bath (-5)
             </span>
           )}
 
@@ -142,10 +172,21 @@ export const ListingCard: React.FC<ListingCardProps> = ({
           )}
         </div>
 
-        {/* Snippet from Raw Text */}
-        <p className="text-xs text-slate-400 line-clamp-2 italic mb-4">
-          "{listing.rawText}"
-        </p>
+        {/* Expandable Post Description */}
+        <div className="mb-4">
+          <div
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="cursor-pointer group/desc bg-slate-900/60 hover:bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 rounded-xl p-3 transition-colors"
+          >
+            <p className={`text-xs text-slate-300 italic ${!isExpanded ? 'line-clamp-2' : ''} leading-relaxed`}>
+              "{listing.rawText}"
+            </p>
+            <div className="flex items-center gap-1 text-[11px] text-cyan-400 font-semibold mt-2 pt-1 border-t border-slate-800/40">
+              <span>{isExpanded ? 'Show less' : 'Read full description'}</span>
+              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </div>
+          </div>
+        </div>
 
         {/* Phone Number Banner if Available */}
         {e.contactPhone && (
@@ -180,6 +221,16 @@ export const ListingCard: React.FC<ListingCardProps> = ({
 
         {/* Contact & Link Actions */}
         <div className="flex items-center gap-1.5">
+          {onFocusMap && (
+            <button
+              onClick={() => onFocusMap(listing)}
+              className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/30 transition-colors"
+              title="Locate on OpenStreetMap"
+            >
+              <MapPin className="w-4 h-4" />
+            </button>
+          )}
+
           {e.contactPhone && (
             <>
               <a

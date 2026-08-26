@@ -19,11 +19,14 @@ import {
 
 /** Options for filtering and sorting rental listings. */
 export interface ListingQueryOptions {
+  readonly page?: number;
+  readonly limit?: number;
   readonly minScore?: number;
   readonly maxRent?: number;
   readonly bhkType?: string;
   readonly furnishing?: string;
   readonly userStatus?: string;
+  readonly recency?: string;
   readonly search?: string;
   readonly sortBy?: 'score_desc' | 'rent_asc' | 'commute_asc' | 'newest';
 }
@@ -74,6 +77,10 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
     hasPowerBackup: Boolean(row.has_power_backup),
     hasAttachedWashroom: Boolean(row.has_attached_washroom),
     hasBalcony: Boolean(row.has_balcony),
+    isVegetarianOnly: /veg\s*only|vegetarian\s*only/i.test(row.raw_text),
+    isMaleBachelorAllowed: true,
+    isFemaleOnly: /female\s*only|girls?\s*only/i.test(row.raw_text),
+    isWalkingDistance: /walking\s*distance|walk\s*to\s*ptp/i.test(row.raw_text),
     furnishing: row.furnishing as FurnishingStatus,
     isKadubeesanahalliDirect: Boolean(row.is_kadubeesanahalli_direct),
     contactPhone: row.contact_phone || null,
@@ -100,13 +107,15 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
       swimmingPool: 0,
       powerBackup: 0,
       attachedWashroom: 0,
+      vegetarianPenalty: 0,
+      bachelorMatch: 0,
+      walkProximity: 0,
       furnished: 0,
       panathurBypass: 0,
       commute: 0,
     };
   }
 
-  // SAFETY: ID is populated by autoincrement primary key in SQLite.
   const id = Number(row.id) as ListingId;
   const fbPostId = makeFbPostId(row.fb_post_id);
 
@@ -133,19 +142,10 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
 
 /** Repository for persisting and querying rental listings across Local SQLite or Turso. */
 export const listingRepository = {
-  /**
-   * Initializes schema if running against a fresh database.
-   */
   async init(): Promise<void> {
     await db.initSchema();
   },
 
-  /**
-   * Inserts or updates a rental listing identified by fb_post_id.
-   *
-   * @param listing - Domain listing payload without generated IDs.
-   * @returns Persisted RentalListing domain entity.
-   */
   async upsertListing(listing: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'>): Promise<RentalListing> {
     const upsertSql = `
       INSERT INTO listings (
@@ -218,12 +218,6 @@ export const listingRepository = {
     return mapRowToListing(row);
   },
 
-  /**
-   * Retrieves filtered and sorted listings.
-   *
-   * @param options - Query filters and sorting parameters.
-   * @returns Array of matching RentalListing domain entities.
-   */
   async getListings(options: ListingQueryOptions = {}): Promise<RentalListing[]> {
     let sql = 'SELECT * FROM listings WHERE 1=1';
     const params: (string | number)[] = [];
@@ -275,28 +269,24 @@ export const listingRepository = {
         break;
     }
 
+    if (options.limit !== undefined) {
+      sql += ' LIMIT ?';
+      params.push(options.limit);
+      if (options.page !== undefined && options.page > 1) {
+        sql += ' OFFSET ?';
+        params.push((options.page - 1) * options.limit);
+      }
+    }
+
     const rows = await db.query<RawDatabaseRow>(sql, params);
     return rows.map(mapRowToListing);
   },
 
-  /**
-   * Retrieves a single listing by its primary database ID.
-   *
-   * @param id - Internal Listing ID.
-   * @returns Matching RentalListing or null.
-   */
   async getListingById(id: number): Promise<RentalListing | null> {
     const row = await db.queryOne<RawDatabaseRow>('SELECT * FROM listings WHERE id = ?', [id]);
     return row ? mapRowToListing(row) : null;
   },
 
-  /**
-   * Updates pipeline tracking status for a listing.
-   *
-   * @param id - Internal Listing ID.
-   * @param status - Target UserListingStatus.
-   * @returns True if record was updated.
-   */
   async updateStatus(id: number, status: UserListingStatus): Promise<boolean> {
     const res = await db.execute(
       'UPDATE listings SET user_status = ?, updated_at = datetime("now") WHERE id = ?',
@@ -305,11 +295,6 @@ export const listingRepository = {
     return res.changes > 0;
   },
 
-  /**
-   * Aggregates live statistical metrics for dashboard summary.
-   *
-   * @returns DashboardStats record.
-   */
   async getStats(): Promise<DashboardStats> {
     const statsRow = await db.queryOne<Record<string, number | null>>(`
       SELECT 
@@ -342,14 +327,6 @@ export const listingRepository = {
     };
   },
 
-  /**
-   * Records a scrape audit log entry.
-   *
-   * @param status - Status of scrape run ('success', 'error', 'seed_loaded').
-   * @param itemsScanned - Count of raw DOM elements scanned.
-   * @param itemsMatched - Count of posts successfully passing all filters.
-   * @param errorMessage - Optional error or warning message.
-   */
   async logScrapeRun(status: string, itemsScanned: number, itemsMatched: number, errorMessage?: string): Promise<void> {
     await db.execute(
       'INSERT INTO scrape_logs (status, items_scanned, items_matched, error_message) VALUES (?, ?, ?, ?)',
