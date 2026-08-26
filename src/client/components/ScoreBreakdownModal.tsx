@@ -22,7 +22,7 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
     {
       label: 'Brokerage Status',
       points: b.brokerage,
-      desc: listing.entities.isBrokerage ? 'Broker Fee Applicable (-30)' : 'No Brokerage / Direct Owner (+15)',
+      desc: listing.entities.isBrokerage ? 'Broker Fee Applicable (-40)' : 'No Brokerage / Direct Owner (+15)',
     },
     {
       label: 'Security Deposit',
@@ -74,7 +74,7 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <span>{listing.tier}</span>
-              <span className="font-mono text-emerald-400 font-extrabold">{listing.score} / 100</span>
+              <span className="font-mono text-emerald-400 font-extrabold">{listing.score} pts</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
               {listing.location} • {listing.bhkType}
@@ -129,7 +129,7 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
 
         {/* Modal Footer */}
         <div className="p-4 bg-slate-950/60 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-          <span>Clamped mathematically between 0 and 100</span>
+          <span>Uncapped raw mathematical score</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors"

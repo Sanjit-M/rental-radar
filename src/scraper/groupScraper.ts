@@ -5,7 +5,6 @@ import { computeListingScore } from '../domain/scorer/ratingEngine';
 import { cleanPostText, generatePostId, parseFacebookTimestamp } from '../domain/parser/cleaner';
 import { listingRepository } from '../db/repository';
 import { hasExistingSession, createPersistentContext } from './browserSession';
-import { SEED_POSTS } from './seedData';
 import { RentalListing, FbPostId, UserListingStatus } from '../domain/types';
 
 /** Target Facebook Group and Recent Chronological Search Sources to monitor. */
@@ -108,6 +107,11 @@ export async function processPost(
   fbPostIdOverride?: FbPostId,
   initialStatus: UserListingStatus = 'new'
 ): Promise<RentalListing | null> {
+  // Strict check: Require exact direct Facebook post permalink per Q2 (Option A)
+  if (!postUrl || (!postUrl.includes('/posts/') && !postUrl.includes('story_fbid=') && !postUrl.includes('/permalink/'))) {
+    return null;
+  }
+
   const clean = cleanPostText(rawText);
 
   // 1. Filter Validation via Result monad
@@ -129,7 +133,7 @@ export async function processPost(
     entities.isKadubeesanahalliDirect
   );
 
-  // 4. Rating Meter Calculation
+  // 4. Rating Meter Calculation (Uncapped mathematical score)
   const { score, breakdown, tier } = computeListingScore(entities, commute);
 
   const fbPostId = fbPostIdOverride || generatePostId(groupName, authorName, clean);
@@ -137,7 +141,7 @@ export async function processPost(
   const listing: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'> = {
     fbPostId,
     groupName,
-    postUrl: postUrl || `https://facebook.com/groups/search/?q=${encodeURIComponent(location)}`,
+    postUrl,
     authorName,
     postedTime,
     rawText: clean,
@@ -245,32 +249,66 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
 
             // 2. Exact Post Time & Absolute IST Conversion
             let postedTimeRaw = 'Recently';
-            const timeEl = await el.$('abbr, a[href*="/posts/"] span, a[href*="/permalink/"] span, a[href*="story_fbid="] span, span[id*="jsc_c"]');
-            if (timeEl) {
-              const timeText = (await timeEl.innerText()).trim();
-              if (timeText && timeText.length > 0) {
-                postedTimeRaw = timeText;
+            const abbrEl = await el.$('abbr');
+            if (abbrEl) {
+              const utime = await abbrEl.getAttribute('data-utime');
+              if (utime) {
+                postedTimeRaw = utime;
+              } else {
+                const abbrText = (await abbrEl.innerText()).trim();
+                if (abbrText) postedTimeRaw = abbrText;
+              }
+            } else {
+              const timeEl = await el.$(
+                'a[href*="/posts/"] span, a[href*="/permalink/"] span, a[href*="story_fbid="] span, span[id*="jsc_c"]'
+              );
+              if (timeEl) {
+                const timeText = (await timeEl.innerText()).trim();
+                if (timeText && timeText.length > 0) {
+                  postedTimeRaw = timeText;
+                }
+              }
+            }
+
+            // Fallback: check if text lines contain publication date (e.g. "· 14 August at 12:11 ·")
+            if (postedTimeRaw === 'Recently') {
+              const lines = text.split('\n').slice(0, 5);
+              for (const line of lines) {
+                if (line.match(/\d{1,2}\s+[A-Za-z]+\s+at\s+\d{1,2}:\d{2}|yesterday\s+at\s+\d{1,2}:\d{2}|\d+\s*(?:hrs?|mins?|days?)\s*ago/i)) {
+                  postedTimeRaw = line.trim();
+                  break;
+                }
               }
             }
             const { formattedIST } = parseFacebookTimestamp(postedTimeRaw);
 
             // 3. Exact Post Permalink Extraction (Clean tracking params)
             let postUrl = '';
-            const linkEl = await el.$('a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid="]');
-            if (linkEl) {
-              const href = await linkEl.getAttribute('href');
-              if (href) {
+            const linkEls = await el.$$(
+              'a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid="], a[role="link"]:has(abbr), a[role="link"]:has(span[id*="jsc_c"])'
+            );
+            for (const link of linkEls) {
+              const href = await link.getAttribute('href');
+              if (href && (href.includes('/posts/') || href.includes('story_fbid=') || href.includes('/permalink/'))) {
                 try {
                   const absoluteHref = href.startsWith('http') ? href : `https://www.facebook.com${href}`;
                   const urlObj = new URL(absoluteHref);
                   urlObj.searchParams.delete('__cft__[0]');
                   urlObj.searchParams.delete('__tn__');
                   urlObj.searchParams.delete('eid');
+                  urlObj.searchParams.delete('rdid');
                   postUrl = urlObj.toString();
+                  if (postUrl) break;
                 } catch {
                   postUrl = href.split('?')[0];
+                  if (postUrl) break;
                 }
               }
+            }
+
+            // Strict Post-Only Filter per Q2 (Option A): Drop if no direct post permalink
+            if (!postUrl) {
+              continue;
             }
 
             const matched = await processPost(text, source.name, authorName, formattedIST, postUrl);

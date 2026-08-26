@@ -55,9 +55,9 @@ export function computeListingScore(
   }
   total += brokeragePoints;
 
-  // 3. Security Deposit Ratio Evaluation (>2.2x monthly rent = -15 penalty)
+  // 3. Security Deposit Ratio Evaluation (>2.2x monthly rent or >60k penalty)
   if (entities.deposit !== null) {
-    if (entities.rent !== null && entities.deposit > 2.2 * entities.rent) {
+    if ((entities.rent !== null && entities.deposit > 2.2 * entities.rent) || entities.deposit > 60000) {
       depositPoints = cfg.highDepositRatioPenalty;
     } else if (entities.deposit <= 50000) {
       depositPoints = cfg.lowDeposit;
@@ -79,9 +79,12 @@ export function computeListingScore(
   if (entities.hasPowerBackup) {
     powerBackupPoints = cfg.powerBackup;
     total += cfg.powerBackup;
+  } else {
+    powerBackupPoints = cfg.noPowerBackupPenalty;
+    total += cfg.noPowerBackupPenalty;
   }
 
-  // 5. Washroom Dedicated (+10) vs Shared (-5)
+  // 5. Washroom Dedicated (+10) vs Shared (-15)
   if (entities.hasAttachedWashroom) {
     attachedWashroomPoints = cfg.attachedWashroom;
   } else {
@@ -89,7 +92,7 @@ export function computeListingScore(
   }
   total += attachedWashroomPoints;
 
-  // 6. Bachelor / Male Match (+10 if male/bachelor allowed, -25 if female only)
+  // 6. Bachelor / Male Match (+10 if male/bachelor allowed, -30 if female only)
   if (entities.isFemaleOnly) {
     bachelorMatchPoints = cfg.bachelorMismatchPenalty;
   } else if (entities.isMaleBachelorAllowed) {
@@ -109,10 +112,13 @@ export function computeListingScore(
     total += cfg.furnished;
   }
 
-  // 9. Panathur S-Bend / Underpass Bypass
+  // 9. Panathur S-Bend / Underpass Bypass (+10 if direct, -35 if bottleneck)
   if (entities.isKadubeesanahalliDirect) {
     panathurBypassPoints = cfg.panathurBypassBonus;
     total += cfg.panathurBypassBonus;
+  } else if (commute.hasPanathurUnderpassBottleneck) {
+    panathurBypassPoints = cfg.panathurUnderpassPenalty;
+    total += cfg.panathurUnderpassPenalty;
   }
 
   // 10. Weekday Peak Commute Time (Two-way average)
@@ -127,23 +133,21 @@ export function computeListingScore(
   }
   total += commutePoints;
 
-  // Clamping pre-penalty score to [0, 100]
-  const clampedBase = Math.max(0, Math.min(100, total));
-
-  // 11. Strict Vegetarian Penalty applied directly to clamped score
+  // 11. Strict Vegetarian Penalty
   if (entities.isVegetarianOnly) {
     vegetarianPenalty = cfg.vegetarianOnlyPenalty;
   }
 
-  const finalScore = Math.max(0, Math.min(100, clampedBase + vegetarianPenalty));
+  // Raw, uncapped mathematical sum without artificial 100 ceiling or 0 floor
+  const finalScore = total + vegetarianPenalty;
 
   // Determine Tier
   let tier: RatingTier = '⚠️ Low Match';
   if (finalScore >= 90) {
     tier = '🔥 Unicorn Deal';
-  } else if (finalScore >= 75) {
+  } else if (finalScore >= 70) {
     tier = '✨ Great Match';
-  } else if (finalScore >= 55) {
+  } else if (finalScore >= 45) {
     tier = '⚡ Moderate Match';
   }
 

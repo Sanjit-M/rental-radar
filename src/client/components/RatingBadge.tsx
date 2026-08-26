@@ -14,9 +14,9 @@ export const RatingBadge: React.FC<RatingBadgeProps> = ({ score, tier, onClick }
   if (score >= 90) {
     badgeStyles = 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 hover:bg-emerald-900/90';
     glowStyle = 'shadow-[0_0_15px_rgba(16,185,129,0.25)]';
-  } else if (score >= 75) {
+  } else if (score >= 70) {
     badgeStyles = 'bg-teal-950/80 text-teal-300 border-teal-500/40 hover:bg-teal-900/80';
-  } else if (score >= 55) {
+  } else if (score >= 45) {
     badgeStyles = 'bg-amber-950/80 text-amber-300 border-amber-500/40 hover:bg-amber-900/80';
   } else {
     badgeStyles = 'bg-rose-950/80 text-rose-300 border-rose-500/40 hover:bg-rose-900/80';

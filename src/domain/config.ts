@@ -185,24 +185,26 @@ export const SCORING_CONFIG = {
   baseScore: 50,
   rentLe25k: 20,
   rent25kTo30k: 0,
-  rentGt30k: -20,
+  rentGt30k: -30,
   noBrokerage: 15,
-  brokerageApplicable: -30,       // Strict brokerage penalty
+  brokerageApplicable: -40,       // Strict brokerage penalty
   lowDeposit: 10,
-  highDepositRatioPenalty: -15,   // > 2.2x monthly rent penalty
+  highDepositRatioPenalty: -30,   // > 2.2x monthly rent or >60k penalty
   gatedSociety: 15,
   swimmingPool: 15,
   powerBackup: 10,
+  noPowerBackupPenalty: -20,      // No DG power backup penalty
   attachedWashroom: 10,
-  sharedWashroomPenalty: -5,      // Shared washroom penalty
+  sharedWashroomPenalty: -15,     // Shared washroom penalty
   vegetarianOnlyPenalty: -50,     // Strict -50pt vegetarian penalty
   bachelorMaleMatch: 10,          // Bachelor male match
-  bachelorMismatchPenalty: -25,   // Strictly female only
+  bachelorMismatchPenalty: -30,   // Strictly female only
   walkingProximityBonus: 15,      // < 500m walking bonus
   furnished: 5,
   panathurBypassBonus: 10,
+  panathurUnderpassPenalty: -35,  // Bottleneck penalty
   commuteLe7min: 20,
   commute8To12min: 10,
-  commute13To18min: -5,
-  commuteGt18min: -25,
+  commute13To18min: -10,
+  commuteGt18min: -30,
 };

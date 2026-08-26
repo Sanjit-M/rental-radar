@@ -180,21 +180,6 @@ export const api = {
     }
   },
 
-  /** Re-seed the database with initial sample listings. */
-  async reseedData(): Promise<Result<{ status: string; count: number }, ApiError>> {
-    try {
-      const res = await fetch(`${API_BASE}/scrape/seed`, {
-        method: 'POST',
-        headers: getHeaders(),
-      });
-      const checked = await classifyResponse(res, 'reseedData');
-      if (checked._tag === 'err') return checked;
-      return ok(await checked.value.json() as { status: string; count: number });
-    } catch (cause) {
-      return err(new NetworkError(cause));
-    }
-  },
-
   /** Fetch runtime configuration, e.g. whether a passcode is required. */
   async getConfig(): Promise<{ requiresPasscode: boolean }> {
     // getConfig is always safe to call and returns a default on failure.

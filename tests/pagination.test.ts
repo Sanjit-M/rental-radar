@@ -6,7 +6,6 @@ vi.hoisted(() => {
 
 // Mock scraper executions to avoid network timeouts during unit testing
 vi.mock('../src/scraper/groupScraper', () => ({
-  seedInitialData: vi.fn().mockResolvedValue(6),
   runScrapeCycle: vi.fn().mockResolvedValue({
     status: 'success',
     scanned: 6,
@@ -34,7 +33,7 @@ function createMockListing(overrides: Partial<RentalListing> = {}): RentalListin
     fbPostId: makeFbPostId('fb_01'),
     groupName: 'Flat and Flatmates Bangalore',
     postUrl: 'https://facebook.com/1',
-    authorName: 'Rohan Deshmukh',
+    authorName: 'Verified Group Member',
     postedTime: '1 hr ago',
     rawText: 'Looking for a male flatmate in Sobha Iris Kadubeesanahalli near PTP. Rent 22k.',
     location: 'Kadubeesanahalli',
@@ -276,8 +275,8 @@ describe('Milestone 1 — Backend Pagination & Data Engine Tests', () => {
         // /scrape/seed should bypass passcode and return 200
         const seedRes = await app.request('/scrape/seed', { method: 'POST' });
         expect(seedRes.status).toBe(200);
-        const seedData = await seedRes.json();
-        expect(seedData.status).toBe('success');
+        const resData = await seedRes.json();
+        expect(resData.status).toBe('success');
 
         // /api/scrape/seed should bypass passcode and return 200
         const apiSeedRes = await app.request('/api/scrape/seed', { method: 'POST' });

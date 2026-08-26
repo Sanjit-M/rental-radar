@@ -133,12 +133,12 @@ describe('Milestone 2 — Geospatial Map & Frontend UI Unit & Contract Tests', (
   });
 
   describe('7. Score Breakdown Modal Brokerage Label (R3)', () => {
-    it('verifies ScoreBreakdownModal.tsx displays -30 pts for brokerage fee penalty', () => {
+    it('verifies ScoreBreakdownModal.tsx displays -40 pts for brokerage fee penalty', () => {
       const modalPath = path.resolve(__dirname, '../src/client/components/ScoreBreakdownModal.tsx');
       const content = fs.readFileSync(modalPath, 'utf8');
 
-      expect(content).toContain('Broker Fee Applicable (-30)');
-      expect(content).not.toContain('Broker Fee Applicable (-25)');
+      expect(content).toContain('Broker Fee Applicable (-40)');
+      expect(content).not.toContain('Broker Fee Applicable (-30)');
     });
   });
 

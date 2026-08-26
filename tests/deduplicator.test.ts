@@ -8,7 +8,7 @@ function createMockListing(overrides: Partial<RentalListing>): RentalListing {
     fbPostId: makeFbPostId('fb_01'),
     groupName: 'Flat and Flatmates Bangalore',
     postUrl: 'https://facebook.com/1',
-    authorName: 'Rohan Deshmukh',
+    authorName: 'Test Member 1',
     postedTime: '1 hr ago',
     rawText: 'Looking for a male flatmate in Sobha Iris Kadubeesanahalli near PTP. Rent 22k.',
     location: 'Kadubeesanahalli',
@@ -77,7 +77,7 @@ describe('Cross-Group Deduplication Engine', () => {
     const uniquePost = createMockListing({
       fbPostId: makeFbPostId('post_3'),
       groupName: 'Group C',
-      authorName: 'Aditya K.',
+      authorName: 'Test Member 2',
       rawText: 'Completely different listing in Assetz East Point.',
       entities: {
         ...postA.entities,

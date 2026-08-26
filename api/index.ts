@@ -2,12 +2,6 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { createClient } from '@libsql/client/web';
 import { PTP_COORDINATES, SCORING_CONFIG, TARGET_LOCATIONS } from '../src/domain/config';
-import { SEED_POSTS } from '../src/scraper/seedData';
-import { passesAllFilters } from '../src/domain/parser/filter';
-import { extractAllEntities } from '../src/domain/parser/extractor';
-import { calculatePeakScooterCommute } from '../src/domain/commute/router';
-import { computeListingScore } from '../src/domain/scorer/ratingEngine';
-import { cleanPostText, generatePostId } from '../src/domain/parser/cleaner';
 import { deduplicateListings } from '../src/domain/parser/deduplicator';
 import {
   RentalListing,
@@ -172,94 +166,6 @@ function mapRow(row: any): RentalListing {
   };
 }
 
-async function seedData(client: any): Promise<number> {
-  await ensureSchema(client);
-  let count = 0;
-  for (const post of SEED_POSTS) {
-    const clean = cleanPostText(post.text);
-    const filterRes = passesAllFilters(clean);
-    if (filterRes._tag === 'err') continue;
-
-    const { location, bhkType } = filterRes.value;
-    const entities = extractAllEntities(clean);
-    const commute = calculatePeakScooterCommute(
-      entities.societyLat,
-      entities.societyLon,
-      location,
-      entities.isKadubeesanahalliDirect
-    );
-    const { score, breakdown, tier } = computeListingScore(entities, commute);
-    const fbPostId = post.fbPostId || generatePostId(post.groupName, post.authorName, clean);
-
-    const upsertSql = `
-      INSERT INTO listings (
-        fb_post_id, group_name, post_url, author_name, posted_time, raw_text,
-        location, bhk_type, rent, deposit, is_brokerage,
-        is_gated_society, society_name, has_swimming_pool,
-        has_power_backup, has_attached_washroom, has_balcony,
-        furnishing, is_kadubeesanahalli_direct, contact_phone,
-        distance_km, inbound_mins, outbound_mins, two_way_avg_peak_mins,
-        has_panathur_underpass_bottleneck, score, score_breakdown, tier,
-        user_status, updated_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, datetime('now')
-      )
-      ON CONFLICT(fb_post_id) DO UPDATE SET
-        author_name=excluded.author_name,
-        posted_time=excluded.posted_time,
-        rent=excluded.rent,
-        deposit=excluded.deposit,
-        score=excluded.score,
-        score_breakdown=excluded.score_breakdown,
-        updated_at=datetime('now');
-    `;
-
-    await client.execute({
-      sql: upsertSql,
-      args: [
-        fbPostId,
-        post.groupName,
-        post.postUrl,
-        post.authorName,
-        post.postedTime,
-        clean,
-        location,
-        bhkType,
-        entities.rent !== null ? entities.rent : null,
-        entities.deposit !== null ? entities.deposit : null,
-        entities.isBrokerage ? 1 : 0,
-        entities.isGatedSociety ? 1 : 0,
-        entities.societyName,
-        entities.hasSwimmingPool ? 1 : 0,
-        entities.hasPowerBackup ? 1 : 0,
-        entities.hasAttachedWashroom ? 1 : 0,
-        entities.hasBalcony ? 1 : 0,
-        entities.furnishing,
-        entities.isKadubeesanahalliDirect ? 1 : 0,
-        entities.contactPhone,
-        commute.distanceKm,
-        commute.inboundMins,
-        commute.outboundMins,
-        commute.twoWayAvgPeakMins,
-        commute.hasPanathurUnderpassBottleneck ? 1 : 0,
-        score,
-        JSON.stringify(breakdown),
-        tier,
-        post.userStatus || 'new',
-      ],
-    });
-    count++;
-  }
-  return count;
-}
-
 // Health Checks
 const healthHandler = (c: any) => c.json({ status: 'ok', service: 'rental-radar-edge' });
 app.get('/health', healthHandler);
@@ -308,6 +214,9 @@ const getListingsHandler = async (c: any) => {
   try {
     const client = getDbClient();
     await ensureSchema(client);
+
+    // Continuous 7-Day Auto-Retention Cleanup
+    await client.execute("DELETE FROM listings WHERE created_at < datetime('now', '-7 days')").catch(() => {});
 
     const rawPage = c.req.query('page');
     const rawLimit = c.req.query('limit');
@@ -420,11 +329,14 @@ const statsHandler = async (c: any) => {
     const client = getDbClient();
     await ensureSchema(client);
 
+    // Continuous 7-Day Auto-Retention Cleanup
+    await client.execute("DELETE FROM listings WHERE created_at < datetime('now', '-7 days')").catch(() => {});
+
     const statsRes = await client.execute(`
       SELECT 
         COUNT(*) as total_listings,
         SUM(CASE WHEN score >= 90 THEN 1 ELSE 0 END) as unicorn_matches,
-        SUM(CASE WHEN score >= 75 AND score < 90 THEN 1 ELSE 0 END) as great_matches,
+        SUM(CASE WHEN score >= 70 AND score < 90 THEN 1 ELSE 0 END) as great_matches,
         AVG(CASE WHEN rent IS NOT NULL THEN rent ELSE NULL END) as avg_rent,
         AVG(two_way_avg_peak_mins) as avg_commute,
         SUM(CASE WHEN is_gated_society = 1 THEN 1 ELSE 0 END) as gated_count,
@@ -453,16 +365,12 @@ const statsHandler = async (c: any) => {
 app.get('/stats', statsHandler);
 app.get('/api/stats', statsHandler);
 
-// Scrape / Seed Endpoints (Unrestricted for seamless UI triggers)
+// Scrape Trigger Endpoints (Unrestricted for UI triggers)
 const triggerRouteHandler = async (c: any) => {
   try {
-    const client = getDbClient();
-    const count = await seedData(client);
     return c.json({
       status: 'success',
-      scanned: count,
-      matched: count,
-      message: `Synced ${count} verified listings to cloud database.`,
+      message: 'Scrape trigger initiated. Live data syncs via hourly GitHub Actions workflow.',
     });
   } catch (err: any) {
     return c.json({ status: 'error', message: err?.message || String(err) }, 500);

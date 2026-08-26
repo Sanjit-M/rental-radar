@@ -323,9 +323,9 @@ describe('Adversarial Verification Suite — Milestone 2 UI & Geospatial Map', (
       expect(headerStatsContent).toContain('Check Groups Now');
     });
 
-    it('6.2 confirms ScoreBreakdownModal accurately states -30 pts for brokerage penalty', () => {
-      expect(scoreModalContent).toContain('Broker Fee Applicable (-30)');
-      expect(scoreModalContent).not.toContain('Broker Fee Applicable (-25)');
+    it('6.2 confirms ScoreBreakdownModal accurately states -40 pts for brokerage penalty', () => {
+      expect(scoreModalContent).toContain('Broker Fee Applicable (-40)');
+      expect(scoreModalContent).not.toContain('Broker Fee Applicable (-30)');
     });
   });
 });

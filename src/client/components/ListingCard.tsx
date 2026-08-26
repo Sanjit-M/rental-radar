@@ -161,7 +161,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
             </span>
           ) : (
             <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700">
-              Shared Bath (-5)
+              Shared Bath (-15)
             </span>
           )}
 

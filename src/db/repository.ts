@@ -315,7 +315,18 @@ export const listingRepository = {
     return mapRowToListing(row);
   },
 
+  async deleteListingsOlderThan(days: number = 7): Promise<number> {
+    const res = await db.execute(
+      `DELETE FROM listings WHERE created_at < datetime('now', '-' || ? || ' days')`,
+      [days]
+    );
+    return res.changes;
+  },
+
   async getPaginatedListings(options: ListingQueryOptions = {}): Promise<PaginatedListingsResponse> {
+    // 0. Continuous 7-Day Auto-Retention Cleanup per Q3 (Option A)
+    await this.deleteListingsOlderThan(7).catch(() => {});
+
     const page = Math.max(1, typeof options.page === 'number' && !isNaN(options.page) ? options.page : 1);
     const limit = Math.min(100, Math.max(1, typeof options.limit === 'number' && !isNaN(options.limit) ? options.limit : 12));
     const offset = (page - 1) * limit;
@@ -349,6 +360,7 @@ export const listingRepository = {
   },
 
   async getListings(options: ListingQueryOptions = {}): Promise<RentalListing[]> {
+    await this.deleteListingsOlderThan(7).catch(() => {});
     const { whereSql, params } = buildWhereClause(options);
     const orderSql = buildOrderClause(options.sortBy);
 
@@ -382,11 +394,12 @@ export const listingRepository = {
   },
 
   async getStats(): Promise<DashboardStats> {
+    await this.deleteListingsOlderThan(7).catch(() => {});
     const statsRow = await db.queryOne<Record<string, number | null>>(`
       SELECT 
         COUNT(*) as total_listings,
         SUM(CASE WHEN score >= 90 THEN 1 ELSE 0 END) as unicorn_matches,
-        SUM(CASE WHEN score >= 75 AND score < 90 THEN 1 ELSE 0 END) as great_matches,
+        SUM(CASE WHEN score >= 70 AND score < 90 THEN 1 ELSE 0 END) as great_matches,
         AVG(CASE WHEN rent IS NOT NULL THEN rent ELSE NULL END) as avg_rent,
         AVG(two_way_avg_peak_mins) as avg_commute,
         SUM(CASE WHEN is_gated_society = 1 THEN 1 ELSE 0 END) as gated_count,

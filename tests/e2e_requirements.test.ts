@@ -70,7 +70,7 @@ function makeTestListing(overrides: Partial<RentalListing> = {}): RentalListing 
     fbPostId: makeFbPostId('fb_test_default'),
     groupName: 'Flat and Flatmates Bangalore',
     postUrl: 'https://facebook.com/groups/test/posts/1',
-    authorName: 'Rohan Deshmukh',
+    authorName: 'Test Listing Author',
     postedTime: '1 hr ago',
     rawText: 'Looking for a male flatmate in Sobha Iris Kadubeesanahalli near PTP. Rent 22k.',
     location: 'Kadubeesanahalli',
@@ -321,7 +321,7 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         hasPanathurUnderpassBottleneck: false,
       };
 
-      it('F3.1: awards +10 points for male/bachelor match and applies -25 penalty for female-only post', () => {
+      it('F3.1: awards +10 points for male/bachelor match and applies -30 penalty for female-only post', () => {
         const maleListing = makeTestListing({
           entities: { ...makeTestListing().entities, isMaleBachelorAllowed: true, isFemaleOnly: false },
         });
@@ -332,10 +332,10 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
           entities: { ...makeTestListing().entities, isMaleBachelorAllowed: false, isFemaleOnly: true },
         });
         const femaleScore = computeListingScore(femaleListing.entities, dummyCommute);
-        expect(femaleScore.breakdown.bachelorMatch).toBe(-25);
+        expect(femaleScore.breakdown.bachelorMatch).toBe(-30);
       });
 
-      it('F3.2: applies strict -30 points penalty for brokerage and awards +15 points for zero brokerage', () => {
+      it('F3.2: applies strict -40 points penalty for brokerage and awards +15 points for zero brokerage', () => {
         const noBrokerListing = makeTestListing({
           entities: { ...makeTestListing().entities, isBrokerage: false },
         });
@@ -346,16 +346,16 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
           entities: { ...makeTestListing().entities, isBrokerage: true },
         });
         const brokerScore = computeListingScore(brokerListing.entities, dummyCommute);
-        expect(brokerScore.breakdown.brokerage).toBe(-30);
+        expect(brokerScore.breakdown.brokerage).toBe(-40);
       });
 
-      it('F3.3: applies -15 points penalty for high deposit ratio (>2.2x rent) and awards +10 for low deposit (<=50k)', () => {
-        // High deposit: Rent 20k, Deposit 60k (3.0x rent)
+      it('F3.3: applies -30 points penalty for high deposit ratio (>2.2x rent or >60k) and awards +10 for low deposit (<=50k)', () => {
+        // High deposit: Rent 20k, Deposit 60k (> 2.2x rent = 44k)
         const highDepScore = computeListingScore(
           { ...makeTestListing().entities, rent: makeINR(20000), deposit: makeINR(60000) },
           dummyCommute
         );
-        expect(highDepScore.breakdown.deposit).toBe(-15);
+        expect(highDepScore.breakdown.deposit).toBe(-30);
 
         // Low deposit: Rent 25k, Deposit 40k (1.6x rent, <=50k)
         const lowDepScore = computeListingScore(
@@ -365,7 +365,7 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         expect(lowDepScore.breakdown.deposit).toBe(10);
       });
 
-      it('F3.4: awards +10 points for attached washroom and applies -5 points penalty for shared washroom', () => {
+      it('F3.4: awards +10 points for attached washroom and applies -15 points penalty for shared washroom', () => {
         const attachedScore = computeListingScore(
           { ...makeTestListing().entities, hasAttachedWashroom: true },
           dummyCommute
@@ -376,7 +376,7 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
           { ...makeTestListing().entities, hasAttachedWashroom: false },
           dummyCommute
         );
-        expect(sharedScore.breakdown.attachedWashroom).toBe(-5);
+        expect(sharedScore.breakdown.attachedWashroom).toBe(-15);
       });
 
       it('F3.5: applies strict -50 points penalty for vegetarian-only restriction subtracted directly from score', () => {
@@ -391,7 +391,7 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
           dummyCommute
         );
         expect(vegScore.breakdown.vegetarianPenalty).toBe(-50);
-        expect(vegScore.score).toBeLessThanOrEqual(50);
+        expect(vegScore.score).toBe(nonVegScore.score - 50);
       });
 
       it('F3.6: awards +15 points proximity walking bonus for listings <500m to PTP or walking distance', () => {
@@ -652,7 +652,7 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         hasPanathurUnderpassBottleneck: false,
       };
 
-      it('B3.1: tests deposit ratio boundary at exactly 2.20x rent (no penalty) vs 2.21x rent (-15 penalty)', () => {
+      it('B3.1: tests deposit ratio boundary at exactly 2.20x rent (no penalty) vs 2.21x rent (-30 penalty)', () => {
         const rent = makeINR(20000);
 
         // Exactly 2.20x rent: 44,000 -> <= 50k bonus (+10), NO penalty
@@ -662,15 +662,15 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         );
         expect(exactRatio.breakdown.deposit).toBe(10);
 
-        // Exactly 2.21x rent: 44,200 -> > 2.2x rent (-15 penalty)
+        // Exactly 2.21x rent: 44,200 -> > 2.2x rent (-30 penalty)
         const exceedingRatio = computeListingScore(
           { ...makeTestListing().entities, rent, deposit: makeINR(44200) },
           dummyCommute
         );
-        expect(exceedingRatio.breakdown.deposit).toBe(-15);
+        expect(exceedingRatio.breakdown.deposit).toBe(-30);
       });
 
-      it('B3.2: tests rent boundaries: 25k (+20), 25001 (0), 30k (0), 30001 (-20)', () => {
+      it('B3.2: tests rent boundaries: 25k (+20), 25001 (0), 30k (0), 30001 (-30)', () => {
         const score25k = computeListingScore(
           { ...makeTestListing().entities, rent: makeINR(25000) },
           dummyCommute
@@ -693,10 +693,10 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
           { ...makeTestListing().entities, rent: makeINR(30001) },
           dummyCommute
         );
-        expect(score30001.breakdown.rent).toBe(-20);
+        expect(score30001.breakdown.rent).toBe(-30);
       });
 
-      it('B3.3: tests commute duration thresholds: <=7m (+20), 8m (+10), 12m (+10), 13m (-5), 18m (-5), 19m (-25)', () => {
+      it('B3.3: tests commute duration thresholds: <=7m (+20), 8m (+10), 12m (+10), 13m (-10), 18m (-10), 19m (-30)', () => {
         const testCommute = (mins: number) =>
           computeListingScore(makeTestListing().entities, {
             ...dummyCommute,
@@ -706,12 +706,12 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         expect(testCommute(7)).toBe(20);
         expect(testCommute(8)).toBe(10);
         expect(testCommute(12)).toBe(10);
-        expect(testCommute(13)).toBe(-5);
-        expect(testCommute(18)).toBe(-5);
-        expect(testCommute(19)).toBe(-25);
+        expect(testCommute(13)).toBe(-10);
+        expect(testCommute(18)).toBe(-10);
+        expect(testCommute(19)).toBe(-30);
       });
 
-      it('B3.4: clamps theoretical maximum score (raw 175 points) to exactly 100', () => {
+      it('B3.4: calculates uncapped raw mathematical score for high-bonus listings (>100)', () => {
         // All positive bonuses active
         const maxScoreResult = computeListingScore(
           {
@@ -735,38 +735,44 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
           { ...dummyCommute, twoWayAvgPeakMins: makeMinutes(3) } // +20
         );
 
-        expect(maxScoreResult.score).toBe(100);
+        expect(maxScoreResult.score).toBe(205);
         expect(maxScoreResult.tier).toBe('🔥 Unicorn Deal');
       });
 
-      it('B3.5: clamps theoretical minimum score (raw negative points) to exactly 0', () => {
+      it('B3.5: calculates uncapped raw mathematical score for severe negative penalty listings (< 0)', () => {
         const minScoreResult = computeListingScore(
           {
-            rent: makeINR(50000), // -20
-            deposit: makeINR(200000), // -15
-            isBrokerage: true, // -30
+            rent: makeINR(50000), // -30
+            deposit: makeINR(200000), // -30
+            isBrokerage: true, // -40
             isGatedSociety: false,
             societyName: null,
             hasSwimmingPool: false,
-            hasPowerBackup: false,
-            hasAttachedWashroom: false, // -5
+            hasPowerBackup: false, // -20
+            hasAttachedWashroom: false, // -15
             hasBalcony: false,
             isVegetarianOnly: true, // -50
             isMaleBachelorAllowed: false,
-            isFemaleOnly: true, // -25
+            isFemaleOnly: true, // -30
             isWalkingDistance: false,
             furnishing: 'Unfurnished',
             isKadubeesanahalliDirect: false,
             contactPhone: null,
           },
-          { ...dummyCommute, twoWayAvgPeakMins: makeMinutes(30) } // -25
+          {
+            distanceKm: makeKilometers(4.0),
+            inboundMins: makeMinutes(25),
+            outboundMins: makeMinutes(35),
+            twoWayAvgPeakMins: makeMinutes(30),
+            hasPanathurUnderpassBottleneck: true, // -35
+          } // -30 commute
         );
 
-        expect(minScoreResult.score).toBe(0);
+        expect(minScoreResult.score).toBe(-230);
         expect(minScoreResult.tier).toBe('⚠️ Low Match');
       });
 
-      it('B3.6: tests exact tier boundary scores: 89 (Great) vs 90 (Unicorn), 74 (Moderate) vs 75 (Great), 54 (Low) vs 55 (Moderate)', () => {
+      it('B3.6: tests exact tier boundary scores: >=90 (Unicorn), 70-89 (Great), 45-69 (Moderate), <45 (Low)', () => {
         const s90 = computeListingScore(
           {
             rent: makeINR(28000),
@@ -788,6 +794,7 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
           },
           { ...dummyCommute, twoWayAvgPeakMins: makeMinutes(3) }
         );
+        expect(s90.score).toBe(115);
         expect(s90.tier).toBe('🔥 Unicorn Deal');
       });
     });
@@ -925,14 +932,14 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
       };
 
       const { score, breakdown, tier } = computeListingScore(entities, commute);
-      expect(breakdown.rent).toBe(-20);
+      expect(breakdown.rent).toBe(-30);
       expect(breakdown.swimmingPool).toBe(15);
       expect(breakdown.walkProximity).toBe(15);
       expect(score).toBeGreaterThanOrEqual(90);
       expect(tier).toBe('🔥 Unicorn Deal');
     });
 
-    it('C3: Vegetarian restriction on luxury unicorn listing results in capped 50-point score', () => {
+    it('C3: Vegetarian restriction on luxury unicorn listing results in -50 point deduction', () => {
       const entities: ExtractedEntities = {
         rent: makeINR(22000), // +20
         deposit: makeINR(44000), // +10
@@ -960,11 +967,9 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         hasPanathurUnderpassBottleneck: false,
       };
 
-      const { score, breakdown, tier } = computeListingScore(entities, commute);
-      // Pre-clamp total is 100, subtracting 50 gives 50 points
+      const { score, breakdown } = computeListingScore(entities, commute);
       expect(breakdown.vegetarianPenalty).toBe(-50);
-      expect(score).toBe(50);
-      expect(tier).toBe('⚠️ Low Match');
+      expect(score).toBe(155);
     });
 
     it('C4: Location exclusion + Demographic filter interaction drops non-target posts early', () => {
@@ -1231,9 +1236,9 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
       expect(kaduScore.breakdown.panathurBypass).toBe(10);
       expect(kaduScore.breakdown.commute).toBe(20);
 
-      // Panathur side gets 0 bypass bonus & -5 commute penalty (13-18m)
-      expect(panathurScore.breakdown.panathurBypass).toBe(0);
-      expect(panathurScore.breakdown.commute).toBe(-5);
+      // Panathur side gets -35 bottleneck penalty & -10 commute penalty (13-18m)
+      expect(panathurScore.breakdown.panathurBypass).toBe(-35);
+      expect(panathurScore.breakdown.commute).toBe(-10);
 
       expect(kaduScore.score).toBeGreaterThan(panathurScore.score);
     });

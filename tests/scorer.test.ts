@@ -42,7 +42,7 @@ describe('Rating & Scorer Engine (Branded Types & Pure Domain)', () => {
     expect(breakdown.commute).toBe(20);
   });
 
-  it('penalizes high rent (>30k), broker fees (-30), high deposit ratio (>2.2x), and long commute', () => {
+  it('penalizes high rent (>30k), broker fees (-40), high deposit ratio (>2.2x or >60k), and long commute (>18m)', () => {
     const entities: ExtractedEntities = {
       rent: makeINR(38000),
       deposit: makeINR(150000),
@@ -71,13 +71,15 @@ describe('Rating & Scorer Engine (Branded Types & Pure Domain)', () => {
     };
 
     const { score, breakdown, tier } = computeListingScore(entities, commute);
-    expect(score).toBeLessThan(50);
+    expect(score).toBe(-140);
     expect(tier).toBe('⚠️ Low Match');
-    expect(breakdown.rent).toBe(-20);
-    expect(breakdown.brokerage).toBe(-30);
-    expect(breakdown.deposit).toBe(-15);
-    expect(breakdown.attachedWashroom).toBe(-5);
-    expect(breakdown.commute).toBe(-25);
+    expect(breakdown.rent).toBe(-30);
+    expect(breakdown.brokerage).toBe(-40);
+    expect(breakdown.deposit).toBe(-30);
+    expect(breakdown.powerBackup).toBe(-20);
+    expect(breakdown.attachedWashroom).toBe(-15);
+    expect(breakdown.panathurBypass).toBe(-35);
+    expect(breakdown.commute).toBe(-30);
   });
 
   it('applies strict -50 point penalty for vegetarian-only restrictions', () => {
@@ -110,6 +112,6 @@ describe('Rating & Scorer Engine (Branded Types & Pure Domain)', () => {
 
     const { score, breakdown } = computeListingScore(entities, commute);
     expect(breakdown.vegetarianPenalty).toBe(-50);
-    expect(score).toBeLessThan(90);
+    expect(score).toBe(155);
   });
 });
