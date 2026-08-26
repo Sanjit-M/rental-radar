@@ -1,4 +1,4 @@
-import { createClient, Client } from '@libsql/client/web';
+import { createClient, Client } from '@libsql/client';
 
 /** Schema SQL shared identically across both local SQLite and Turso Cloud SQLite. */
 export const SCHEMA_SQL = `

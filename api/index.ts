@@ -84,12 +84,19 @@ let schemaReady = false;
 async function ensureSchema(client: any) {
   if (schemaReady) return;
   const statements = SCHEMA_SQL.split(';').map((s) => s.trim()).filter((s) => s.length > 0);
-  for (const stmt of statements) {
-    try {
-      await client.execute(stmt);
-    } catch {
-      // Ignore already exists
+  try {
+    if (typeof client.batch === 'function') {
+      await client.batch(
+        statements.map((sql: string) => ({ sql, args: [] })),
+        'write'
+      );
+    } else {
+      for (const stmt of statements) {
+        await client.execute(stmt);
+      }
     }
+  } catch {
+    // Ignore already exists
   }
   schemaReady = true;
 }
@@ -269,14 +276,45 @@ const configHandler = (c: any) =>
 app.get('/config', configHandler);
 app.get('/api/config', configHandler);
 
+function buildRecencySqlCondition(recency?: string): string {
+  if (!recency || recency === 'all') return '';
+
+  switch (recency) {
+    case '1h':
+      return " AND (created_at >= datetime('now', '-1 hour') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%' OR posted_time LIKE '%1 hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%11 hr%' AND posted_time NOT LIKE '%21 hr%' AND posted_time NOT LIKE '%11 hour%' AND posted_time NOT LIKE '%21 hour%' AND posted_time NOT LIKE '%day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%'))";
+
+    case '3h':
+      return " AND (created_at >= datetime('now', '-3 hours') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%' OR posted_time LIKE '%2 hr%' OR posted_time LIKE '%3 hr%' OR posted_time LIKE '%1 hour%' OR posted_time LIKE '%2 hour%' OR posted_time LIKE '%3 hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%11 hr%' AND posted_time NOT LIKE '%21 hr%' AND posted_time NOT LIKE '%12 hr%' AND posted_time NOT LIKE '%22 hr%' AND posted_time NOT LIKE '%13 hr%' AND posted_time NOT LIKE '%23 hr%' AND posted_time NOT LIKE '%11 hour%' AND posted_time NOT LIKE '%21 hour%' AND posted_time NOT LIKE '%12 hour%' AND posted_time NOT LIKE '%22 hour%' AND posted_time NOT LIKE '%13 hour%' AND posted_time NOT LIKE '%23 hour%' AND posted_time NOT LIKE '%day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%'))";
+
+    case '6h':
+      return " AND (created_at >= datetime('now', '-6 hours') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%' OR posted_time LIKE '%2 hr%' OR posted_time LIKE '%3 hr%' OR posted_time LIKE '%4 hr%' OR posted_time LIKE '%5 hr%' OR posted_time LIKE '%6 hr%' OR posted_time LIKE '%1 hour%' OR posted_time LIKE '%2 hour%' OR posted_time LIKE '%3 hour%' OR posted_time LIKE '%4 hour%' OR posted_time LIKE '%5 hour%' OR posted_time LIKE '%6 hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%11 hr%' AND posted_time NOT LIKE '%21 hr%' AND posted_time NOT LIKE '%12 hr%' AND posted_time NOT LIKE '%22 hr%' AND posted_time NOT LIKE '%13 hr%' AND posted_time NOT LIKE '%23 hr%' AND posted_time NOT LIKE '%14 hr%' AND posted_time NOT LIKE '%24 hr%' AND posted_time NOT LIKE '%15 hr%' AND posted_time NOT LIKE '%16 hr%' AND posted_time NOT LIKE '%11 hour%' AND posted_time NOT LIKE '%21 hour%' AND posted_time NOT LIKE '%12 hour%' AND posted_time NOT LIKE '%22 hour%' AND posted_time NOT LIKE '%13 hour%' AND posted_time NOT LIKE '%23 hour%' AND posted_time NOT LIKE '%14 hour%' AND posted_time NOT LIKE '%24 hour%' AND posted_time NOT LIKE '%15 hour%' AND posted_time NOT LIKE '%16 hour%' AND posted_time NOT LIKE '%day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%'))";
+
+    case '12h':
+      return " AND (created_at >= datetime('now', '-12 hours') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%hr%' OR posted_time LIKE '%hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%13 hr%' AND posted_time NOT LIKE '%14 hr%' AND posted_time NOT LIKE '%15 hr%' AND posted_time NOT LIKE '%16 hr%' AND posted_time NOT LIKE '%17 hr%' AND posted_time NOT LIKE '%18 hr%' AND posted_time NOT LIKE '%19 hr%' AND posted_time NOT LIKE '%20 hr%' AND posted_time NOT LIKE '%21 hr%' AND posted_time NOT LIKE '%22 hr%' AND posted_time NOT LIKE '%23 hr%' AND posted_time NOT LIKE '%24 hr%' AND posted_time NOT LIKE '%13 hour%' AND posted_time NOT LIKE '%14 hour%' AND posted_time NOT LIKE '%15 hour%' AND posted_time NOT LIKE '%16 hour%' AND posted_time NOT LIKE '%17 hour%' AND posted_time NOT LIKE '%18 hour%' AND posted_time NOT LIKE '%19 hour%' AND posted_time NOT LIKE '%20 hour%' AND posted_time NOT LIKE '%21 hour%' AND posted_time NOT LIKE '%22 hour%' AND posted_time NOT LIKE '%23 hour%' AND posted_time NOT LIKE '%24 hour%' AND posted_time NOT LIKE '%day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%' AND posted_time NOT LIKE '%year%'))";
+
+    case '24h':
+      return " AND (created_at >= datetime('now', '-24 hours') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%hr%' OR posted_time LIKE '%hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%' OR posted_time LIKE '%1 day%' OR posted_time LIKE '%1day%') AND posted_time NOT LIKE '%2 day%' AND posted_time NOT LIKE '%3 day%' AND posted_time NOT LIKE '%4 day%' AND posted_time NOT LIKE '%5 day%' AND posted_time NOT LIKE '%6 day%' AND posted_time NOT LIKE '%7 day%' AND posted_time NOT LIKE '%8 day%' AND posted_time NOT LIKE '%9 day%' AND posted_time NOT LIKE '%2day%' AND posted_time NOT LIKE '%3day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%' AND posted_time NOT LIKE '%year%'))";
+
+    case '7d':
+      return " AND (created_at >= datetime('now', '-7 days') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%hr%' OR posted_time LIKE '%hour%' OR posted_time LIKE '%day%' OR posted_time LIKE '%1 week%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%8 day%' AND posted_time NOT LIKE '%9 day%' AND posted_time NOT LIKE '%10 day%' AND posted_time NOT LIKE '%11 day%' AND posted_time NOT LIKE '%12 day%' AND posted_time NOT LIKE '%13 day%' AND posted_time NOT LIKE '%14 day%' AND posted_time NOT LIKE '%2 week%' AND posted_time NOT LIKE '%3 week%' AND posted_time NOT LIKE '%4 week%' AND posted_time NOT LIKE '%month%' AND posted_time NOT LIKE '%year%'))";
+
+    default:
+      return '';
+  }
+}
+
 // Listings Endpoints (with Backend Database Pagination & Recency Filtering)
 const getListingsHandler = async (c: any) => {
   try {
     const client = getDbClient();
     await ensureSchema(client);
 
-    const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
-    const limit = Math.min(50, Math.max(1, parseInt(c.req.query('limit') || '12', 10)));
+    const rawPage = c.req.query('page');
+    const rawLimit = c.req.query('limit');
+    const parsedPage = rawPage ? parseInt(rawPage, 10) : 1;
+    const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 12;
+    const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+    const limit = isNaN(parsedLimit) || parsedLimit < 1 ? 12 : Math.min(50, parsedLimit);
     const offset = (page - 1) * limit;
 
     const minScore = c.req.query('minScore') ? parseInt(c.req.query('minScore')!, 10) : undefined;
@@ -291,11 +329,11 @@ const getListingsHandler = async (c: any) => {
     let whereClause = ' WHERE 1=1';
     const args: any[] = [];
 
-    if (minScore !== undefined) {
+    if (minScore !== undefined && !isNaN(minScore)) {
       whereClause += ' AND score >= ?';
       args.push(minScore);
     }
-    if (maxRent !== undefined) {
+    if (maxRent !== undefined && !isNaN(maxRent)) {
       whereClause += ' AND (rent <= ? OR rent IS NULL)';
       args.push(maxRent);
     }
@@ -312,10 +350,7 @@ const getListingsHandler = async (c: any) => {
       args.push(userStatus);
     }
     if (recency && recency !== 'all') {
-      if (recency === '1h') whereClause += " AND (posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%')";
-      else if (recency === '3h') whereClause += " AND (posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%' OR posted_time LIKE '%2 hr%' OR posted_time LIKE '%3 hr%')";
-      else if (recency === '6h') whereClause += " AND (posted_time LIKE '%min%' OR posted_time LIKE '%hr%' AND NOT posted_time LIKE '%day%')";
-      else if (recency === '12h' || recency === '24h') whereClause += " AND (posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%')";
+      whereClause += buildRecencySqlCondition(recency);
     }
     if (search) {
       whereClause += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
@@ -336,26 +371,66 @@ const getListingsHandler = async (c: any) => {
         break;
     }
 
-    // Auto-seed if database is completely empty
-    const allRows = await client.execute('SELECT COUNT(*) as cnt FROM listings');
-    const totalInDb = Number(allRows.rows[0]?.cnt || 0);
-    if (totalInDb === 0) {
-      await seedData(client);
-    }
-
-    // Count Total Matching Records
-    const countRes = await client.execute({ sql: `SELECT COUNT(*) as total FROM listings ${whereClause}`, args });
-    const totalCount = Number(countRes.rows[0]?.total || 0);
-
-    // Fetch Paginated Records
+    const countSql = `SELECT COUNT(*) as total FROM listings ${whereClause}`;
     const dataSql = `SELECT * FROM listings ${whereClause} ${orderClause} LIMIT ? OFFSET ?`;
     const paginatedArgs = [...args, limit, offset];
-    const result = await client.execute({ sql: dataSql, args: paginatedArgs });
 
-    const rawListings = result.rows.map(mapRow);
+    let totalCount = 0;
+    let rawRows: any[] = [];
+
+    if (typeof client.batch === 'function') {
+      const batchRes: any[] = await client.batch(
+        [
+          { sql: countSql, args },
+          { sql: dataSql, args: paginatedArgs },
+        ],
+        'read'
+      );
+      totalCount = Number(batchRes[0]?.rows[0]?.total || 0);
+      rawRows = batchRes[1]?.rows || [];
+    } else {
+      const countRes = await client.execute({ sql: countSql, args });
+      totalCount = Number(countRes.rows[0]?.total || 0);
+      const dataRes = await client.execute({ sql: dataSql, args: paginatedArgs });
+      rawRows = dataRes.rows;
+    }
+
+    // Auto-seed if database is completely empty on an unfiltered root query
+    if (
+      totalCount === 0 &&
+      !search &&
+      minScore === undefined &&
+      maxRent === undefined &&
+      (!recency || recency === 'all') &&
+      (!bhkType || bhkType === 'all') &&
+      (!furnishing || furnishing === 'all') &&
+      (!userStatus || userStatus === 'all')
+    ) {
+      const seedCount = await seedData(client);
+      if (seedCount > 0) {
+        if (typeof client.batch === 'function') {
+          const batchRes: any[] = await client.batch(
+            [
+              { sql: countSql, args },
+              { sql: dataSql, args: paginatedArgs },
+            ],
+            'read'
+          );
+          totalCount = Number(batchRes[0]?.rows[0]?.total || 0);
+          rawRows = batchRes[1]?.rows || [];
+        } else {
+          const countRes = await client.execute({ sql: countSql, args });
+          totalCount = Number(countRes.rows[0]?.total || 0);
+          const dataRes = await client.execute({ sql: dataSql, args: paginatedArgs });
+          rawRows = dataRes.rows;
+        }
+      }
+    }
+
+    const rawListings = rawRows.map(mapRow);
     const listings = deduplicateListings(rawListings);
 
-    const totalPages = Math.ceil(totalCount / limit);
+    const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / limit);
     const hasMore = page < totalPages;
 
     return c.json({
@@ -368,7 +443,19 @@ const getListingsHandler = async (c: any) => {
       listings,
     });
   } catch (err: any) {
-    return c.json({ count: 0, totalCount: 0, page: 1, limit: 12, totalPages: 0, hasMore: false, listings: [], error: err?.message || String(err) }, 500);
+    return c.json(
+      {
+        count: 0,
+        totalCount: 0,
+        page: 1,
+        limit: 12,
+        totalPages: 0,
+        hasMore: false,
+        listings: [],
+        error: err?.message || String(err),
+      },
+      500
+    );
   }
 };
 
@@ -419,7 +506,12 @@ const triggerRouteHandler = async (c: any) => {
   try {
     const client = getDbClient();
     const count = await seedData(client);
-    return c.json({ status: 'success', scanned: count, matched: count, message: `Synced ${count} verified listings to cloud database.` });
+    return c.json({
+      status: 'success',
+      scanned: count,
+      matched: count,
+      message: `Synced ${count} verified listings to cloud database.`,
+    });
   } catch (err: any) {
     return c.json({ status: 'error', message: err?.message || String(err) }, 500);
   }
@@ -427,6 +519,8 @@ const triggerRouteHandler = async (c: any) => {
 
 app.post('/scrape/trigger', triggerRouteHandler);
 app.post('/api/scrape/trigger', triggerRouteHandler);
+app.post('/scrape/seed', triggerRouteHandler);
+app.post('/api/scrape/seed', triggerRouteHandler);
 
 // Status Update Handler
 const updateStatusHandler = async (c: any) => {

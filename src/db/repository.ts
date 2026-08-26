@@ -1,4 +1,5 @@
 import { db } from './database';
+import { deduplicateListings } from '../domain/parser/deduplicator';
 import {
   RentalListing,
   ExtractedEntities,
@@ -11,6 +12,7 @@ import {
   DashboardStats,
   ListingId,
   FbPostId,
+  PaginatedListingsResponse,
   makeINR,
   makeKilometers,
   makeMinutes,
@@ -29,6 +31,37 @@ export interface ListingQueryOptions {
   readonly recency?: string;
   readonly search?: string;
   readonly sortBy?: 'score_desc' | 'rent_asc' | 'commute_asc' | 'newest';
+}
+
+/**
+ * Generates SQL condition for recency time-window filtering.
+ * Evaluates both SQLite datetime created_at records and relative posted_time strings.
+ */
+export function buildRecencySqlCondition(recency?: string): string {
+  if (!recency || recency === 'all') return '';
+
+  switch (recency) {
+    case '1h':
+      return " AND (created_at >= datetime('now', '-1 hour') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%' OR posted_time LIKE '%1 hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%11 hr%' AND posted_time NOT LIKE '%21 hr%' AND posted_time NOT LIKE '%11 hour%' AND posted_time NOT LIKE '%21 hour%' AND posted_time NOT LIKE '%day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%'))";
+
+    case '3h':
+      return " AND (created_at >= datetime('now', '-3 hours') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%' OR posted_time LIKE '%2 hr%' OR posted_time LIKE '%3 hr%' OR posted_time LIKE '%1 hour%' OR posted_time LIKE '%2 hour%' OR posted_time LIKE '%3 hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%11 hr%' AND posted_time NOT LIKE '%21 hr%' AND posted_time NOT LIKE '%12 hr%' AND posted_time NOT LIKE '%22 hr%' AND posted_time NOT LIKE '%13 hr%' AND posted_time NOT LIKE '%23 hr%' AND posted_time NOT LIKE '%11 hour%' AND posted_time NOT LIKE '%21 hour%' AND posted_time NOT LIKE '%12 hour%' AND posted_time NOT LIKE '%22 hour%' AND posted_time NOT LIKE '%13 hour%' AND posted_time NOT LIKE '%23 hour%' AND posted_time NOT LIKE '%day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%'))";
+
+    case '6h':
+      return " AND (created_at >= datetime('now', '-6 hours') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%1 hr%' OR posted_time LIKE '%2 hr%' OR posted_time LIKE '%3 hr%' OR posted_time LIKE '%4 hr%' OR posted_time LIKE '%5 hr%' OR posted_time LIKE '%6 hr%' OR posted_time LIKE '%1 hour%' OR posted_time LIKE '%2 hour%' OR posted_time LIKE '%3 hour%' OR posted_time LIKE '%4 hour%' OR posted_time LIKE '%5 hour%' OR posted_time LIKE '%6 hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%11 hr%' AND posted_time NOT LIKE '%21 hr%' AND posted_time NOT LIKE '%12 hr%' AND posted_time NOT LIKE '%22 hr%' AND posted_time NOT LIKE '%13 hr%' AND posted_time NOT LIKE '%23 hr%' AND posted_time NOT LIKE '%14 hr%' AND posted_time NOT LIKE '%24 hr%' AND posted_time NOT LIKE '%15 hr%' AND posted_time NOT LIKE '%16 hr%' AND posted_time NOT LIKE '%11 hour%' AND posted_time NOT LIKE '%21 hour%' AND posted_time NOT LIKE '%12 hour%' AND posted_time NOT LIKE '%22 hour%' AND posted_time NOT LIKE '%13 hour%' AND posted_time NOT LIKE '%23 hour%' AND posted_time NOT LIKE '%14 hour%' AND posted_time NOT LIKE '%24 hour%' AND posted_time NOT LIKE '%15 hour%' AND posted_time NOT LIKE '%16 hour%' AND posted_time NOT LIKE '%day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%'))";
+
+    case '12h':
+      return " AND (created_at >= datetime('now', '-12 hours') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%hr%' OR posted_time LIKE '%hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%13 hr%' AND posted_time NOT LIKE '%14 hr%' AND posted_time NOT LIKE '%15 hr%' AND posted_time NOT LIKE '%16 hr%' AND posted_time NOT LIKE '%17 hr%' AND posted_time NOT LIKE '%18 hr%' AND posted_time NOT LIKE '%19 hr%' AND posted_time NOT LIKE '%20 hr%' AND posted_time NOT LIKE '%21 hr%' AND posted_time NOT LIKE '%22 hr%' AND posted_time NOT LIKE '%23 hr%' AND posted_time NOT LIKE '%24 hr%' AND posted_time NOT LIKE '%13 hour%' AND posted_time NOT LIKE '%14 hour%' AND posted_time NOT LIKE '%15 hour%' AND posted_time NOT LIKE '%16 hour%' AND posted_time NOT LIKE '%17 hour%' AND posted_time NOT LIKE '%18 hour%' AND posted_time NOT LIKE '%19 hour%' AND posted_time NOT LIKE '%20 hour%' AND posted_time NOT LIKE '%21 hour%' AND posted_time NOT LIKE '%22 hour%' AND posted_time NOT LIKE '%23 hour%' AND posted_time NOT LIKE '%24 hour%' AND posted_time NOT LIKE '%day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%' AND posted_time NOT LIKE '%year%'))";
+
+    case '24h':
+      return " AND (created_at >= datetime('now', '-24 hours') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%hr%' OR posted_time LIKE '%hour%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%' OR posted_time LIKE '%1 day%' OR posted_time LIKE '%1day%') AND posted_time NOT LIKE '%2 day%' AND posted_time NOT LIKE '%3 day%' AND posted_time NOT LIKE '%4 day%' AND posted_time NOT LIKE '%5 day%' AND posted_time NOT LIKE '%6 day%' AND posted_time NOT LIKE '%7 day%' AND posted_time NOT LIKE '%8 day%' AND posted_time NOT LIKE '%9 day%' AND posted_time NOT LIKE '%2day%' AND posted_time NOT LIKE '%3day%' AND posted_time NOT LIKE '%week%' AND posted_time NOT LIKE '%month%' AND posted_time NOT LIKE '%year%'))";
+
+    case '7d':
+      return " AND (created_at >= datetime('now', '-7 days') OR ((posted_time LIKE '%min%' OR posted_time LIKE '%hr%' OR posted_time LIKE '%hour%' OR posted_time LIKE '%day%' OR posted_time LIKE '%1 week%' OR posted_time LIKE '%just now%' OR posted_time LIKE '%Recently%') AND posted_time NOT LIKE '%8 day%' AND posted_time NOT LIKE '%9 day%' AND posted_time NOT LIKE '%10 day%' AND posted_time NOT LIKE '%11 day%' AND posted_time NOT LIKE '%12 day%' AND posted_time NOT LIKE '%13 day%' AND posted_time NOT LIKE '%14 day%' AND posted_time NOT LIKE '%2 week%' AND posted_time NOT LIKE '%3 week%' AND posted_time NOT LIKE '%4 week%' AND posted_time NOT LIKE '%month%' AND posted_time NOT LIKE '%year%'))";
+
+    default:
+      return '';
+  }
 }
 
 interface RawDatabaseRow {
@@ -140,6 +173,62 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
   };
 }
 
+function buildWhereClause(options: ListingQueryOptions): { whereSql: string; params: (string | number)[] } {
+  let whereSql = ' WHERE 1=1';
+  const params: (string | number)[] = [];
+
+  if (options.minScore !== undefined) {
+    whereSql += ' AND score >= ?';
+    params.push(options.minScore);
+  }
+
+  if (options.maxRent !== undefined) {
+    whereSql += ' AND (rent <= ? OR rent IS NULL)';
+    params.push(options.maxRent);
+  }
+
+  if (options.bhkType && options.bhkType !== 'all') {
+    whereSql += ' AND bhk_type LIKE ?';
+    params.push(`%${options.bhkType}%`);
+  }
+
+  if (options.furnishing && options.furnishing !== 'all') {
+    whereSql += ' AND furnishing = ?';
+    params.push(options.furnishing);
+  }
+
+  if (options.userStatus && options.userStatus !== 'all') {
+    whereSql += ' AND user_status = ?';
+    params.push(options.userStatus);
+  }
+
+  if (options.recency && options.recency !== 'all') {
+    whereSql += buildRecencySqlCondition(options.recency);
+  }
+
+  if (options.search) {
+    whereSql += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
+    const term = `%${options.search}%`;
+    params.push(term, term, term, term, term);
+  }
+
+  return { whereSql, params };
+}
+
+function buildOrderClause(sortBy?: string): string {
+  switch (sortBy) {
+    case 'rent_asc':
+      return ' ORDER BY CASE WHEN rent IS NULL THEN 999999 ELSE rent END ASC';
+    case 'commute_asc':
+      return ' ORDER BY two_way_avg_peak_mins ASC';
+    case 'newest':
+      return ' ORDER BY created_at DESC';
+    case 'score_desc':
+    default:
+      return ' ORDER BY score DESC, created_at DESC';
+  }
+}
+
 /** Repository for persisting and querying rental listings across Local SQLite or Turso. */
 export const listingRepository = {
   async init(): Promise<void> {
@@ -218,67 +307,59 @@ export const listingRepository = {
     return mapRowToListing(row);
   },
 
+  async getPaginatedListings(options: ListingQueryOptions = {}): Promise<PaginatedListingsResponse> {
+    const page = Math.max(1, typeof options.page === 'number' && !isNaN(options.page) ? options.page : 1);
+    const limit = Math.min(50, Math.max(1, typeof options.limit === 'number' && !isNaN(options.limit) ? options.limit : 12));
+    const offset = (page - 1) * limit;
+
+    const { whereSql, params } = buildWhereClause(options);
+    const orderSql = buildOrderClause(options.sortBy);
+
+    // 1. Query total matching count
+    const countSql = `SELECT COUNT(*) as total FROM listings${whereSql}`;
+    const countRow = await db.queryOne<{ total: number }>(countSql, params);
+    const totalCount = Number(countRow?.total || 0);
+
+    // 2. Query paginated slice
+    const dataSql = `SELECT * FROM listings${whereSql}${orderSql} LIMIT ? OFFSET ?`;
+    const dataParams = [...params, limit, offset];
+    const rows = await db.query<RawDatabaseRow>(dataSql, dataParams);
+    const rawListings = rows.map(mapRowToListing);
+
+    // 3. Deduplicate listings within this slice
+    const listings = deduplicateListings(rawListings);
+
+    const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / limit);
+    const hasMore = page < totalPages;
+
+    return {
+      count: listings.length,
+      totalCount,
+      page,
+      limit,
+      totalPages,
+      hasMore,
+      listings,
+    };
+  },
+
   async getListings(options: ListingQueryOptions = {}): Promise<RentalListing[]> {
-    let sql = 'SELECT * FROM listings WHERE 1=1';
-    const params: (string | number)[] = [];
+    const { whereSql, params } = buildWhereClause(options);
+    const orderSql = buildOrderClause(options.sortBy);
 
-    if (options.minScore !== undefined) {
-      sql += ' AND score >= ?';
-      params.push(options.minScore);
-    }
-
-    if (options.maxRent !== undefined) {
-      sql += ' AND (rent <= ? OR rent IS NULL)';
-      params.push(options.maxRent);
-    }
-
-    if (options.bhkType && options.bhkType !== 'all') {
-      sql += ' AND bhk_type LIKE ?';
-      params.push(`%${options.bhkType}%`);
-    }
-
-    if (options.furnishing && options.furnishing !== 'all') {
-      sql += ' AND furnishing = ?';
-      params.push(options.furnishing);
-    }
-
-    if (options.userStatus && options.userStatus !== 'all') {
-      sql += ' AND user_status = ?';
-      params.push(options.userStatus);
-    }
-
-    if (options.search) {
-      sql += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
-      const term = `%${options.search}%`;
-      params.push(term, term, term, term, term);
-    }
-
-    switch (options.sortBy) {
-      case 'rent_asc':
-        sql += ' ORDER BY CASE WHEN rent IS NULL THEN 999999 ELSE rent END ASC';
-        break;
-      case 'commute_asc':
-        sql += ' ORDER BY two_way_avg_peak_mins ASC';
-        break;
-      case 'newest':
-        sql += ' ORDER BY created_at DESC';
-        break;
-      case 'score_desc':
-      default:
-        sql += ' ORDER BY score DESC, created_at DESC';
-        break;
-    }
+    let sql = `SELECT * FROM listings${whereSql}${orderSql}`;
+    const queryParams = [...params];
 
     if (options.limit !== undefined) {
       sql += ' LIMIT ?';
-      params.push(options.limit);
+      queryParams.push(options.limit);
       if (options.page !== undefined && options.page > 1) {
         sql += ' OFFSET ?';
-        params.push((options.page - 1) * options.limit);
+        queryParams.push((options.page - 1) * options.limit);
       }
     }
 
-    const rows = await db.query<RawDatabaseRow>(sql, params);
+    const rows = await db.query<RawDatabaseRow>(sql, queryParams);
     return rows.map(mapRowToListing);
   },
 

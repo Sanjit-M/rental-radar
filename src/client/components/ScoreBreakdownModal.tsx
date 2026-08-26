@@ -22,7 +22,7 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
     {
       label: 'Brokerage Status',
       points: b.brokerage,
-      desc: listing.entities.isBrokerage ? 'Broker Fee Applicable (-25)' : 'No Brokerage / Direct Owner (+15)',
+      desc: listing.entities.isBrokerage ? 'Broker Fee Applicable (-30)' : 'No Brokerage / Direct Owner (+15)',
     },
     {
       label: 'Security Deposit',

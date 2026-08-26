@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RentalListing, DashboardStats, UserListingStatus, PaginatedListingsResponse } from '../domain/types';
+import { RentalListing, DashboardStats, UserListingStatus } from '../domain/types';
 import { FilterBar } from './components/FilterBar';
 import { ListingCard } from './components/ListingCard';
 import { ListingTable } from './components/ListingTable';
 import { MapView } from './components/MapView';
 import { ScoreBreakdownModal } from './components/ScoreBreakdownModal';
+import { api } from './services/api';
 import {
   Compass,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
   Waves,
   IndianRupee,
   Layers,
+  ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
 
@@ -51,26 +53,18 @@ export const App: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams({
-          page: targetPage.toString(),
-          limit: '12',
-          minScore: minScore.toString(),
-          maxRent: maxRent.toString(),
+        const data = await api.getListings({
+          page: targetPage,
+          limit: 12,
+          minScore,
+          maxRent,
           sortBy,
+          ...(bhkType !== 'all' ? { bhkType } : {}),
+          ...(furnishing !== 'all' ? { furnishing } : {}),
+          ...(userStatus !== 'all' ? { userStatus } : {}),
+          ...(recency !== 'all' ? { recency } : {}),
+          ...(search.trim() ? { search: search.trim() } : {}),
         });
-
-        if (bhkType !== 'all') params.append('bhkType', bhkType);
-        if (furnishing !== 'all') params.append('furnishing', furnishing);
-        if (userStatus !== 'all') params.append('userStatus', userStatus);
-        if (recency !== 'all') params.append('recency', recency);
-        if (search.trim()) params.append('search', search.trim());
-
-        const res = await fetch(`/api/listings?${params.toString()}`);
-        if (!res.ok) {
-          throw new Error(`Server returned HTTP ${res.status}`);
-        }
-
-        const data: PaginatedListingsResponse = await res.json();
 
         if (append) {
           setListings((prev) => [...prev, ...data.listings]);
@@ -94,11 +88,8 @@ export const App: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/stats');
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
+      const data = await api.getStats();
+      setStats(data);
     } catch {
       // Non-critical stats error
     }
@@ -115,11 +106,7 @@ export const App: React.FC = () => {
         prev.map((l) => (l.id === id ? { ...l, userStatus: status } : l))
       );
 
-      await fetch(`/api/listings/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
+      await api.updateListingStatus(id, status);
       fetchStats();
     } catch (err) {
       console.error('Status update failed:', err);
@@ -130,8 +117,7 @@ export const App: React.FC = () => {
     setScraping(true);
     setScrapeNotice(null);
     try {
-      const res = await fetch('/api/scrape/trigger', { method: 'POST' });
-      const data = await res.json();
+      const data = await api.triggerScrape();
       setScrapeNotice(data.message || 'Scrape cycle complete!');
       fetchListings(1, false);
       fetchStats();
@@ -153,9 +139,10 @@ export const App: React.FC = () => {
     setSortBy('score_desc');
   };
 
-  const handleLoadMore = () => {
-    if (hasMore && !loading) {
-      fetchListings(page + 1, true);
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== page && !loading) {
+      fetchListings(newPage, false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -355,17 +342,84 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {/* Backend Pagination: Load More Button */}
-        {hasMore && viewMode !== 'map' && (
-          <div className="flex justify-center pt-4">
-            <button
-              onClick={handleLoadMore}
-              disabled={loading}
-              className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-400 font-bold text-xs transition-colors shadow-lg disabled:opacity-50"
-            >
-              <span>{loading ? 'Loading...' : `Load More (${listings.length} of ${totalCount})`}</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
+        {/* Server-Side Pagination Controls */}
+        {totalCount > 0 && viewMode !== 'map' && (
+          <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs shadow-xl">
+            {/* Range / Total Count Info */}
+            <div className="text-slate-400 font-medium text-center sm:text-left">
+              Showing{' '}
+              <span className="text-white font-bold font-mono">
+                {(page - 1) * 12 + 1}–{Math.min(page * 12, totalCount)}
+              </span>{' '}
+              of <span className="text-white font-bold font-mono">{totalCount}</span> listings
+              <span className="mx-2 text-slate-600">•</span>
+              Page <span className="text-emerald-400 font-bold font-mono">{page}</span> of{' '}
+              <span className="text-slate-200 font-bold font-mono">{totalPages}</span>
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              {/* Previous Button */}
+              <button
+                onClick={() => handlePageChange(page - 1)}
+                disabled={page <= 1 || loading}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Previous</span>
+              </button>
+
+              {/* Page Numbers */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter((p) => {
+                    if (totalPages <= 7) return true;
+                    if (p === 1 || p === totalPages) return true;
+                    return Math.abs(p - page) <= 1;
+                  })
+                  .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && typeof p === 'number' && typeof arr[idx - 1] === 'number') {
+                      if ((p as number) - (arr[idx - 1] as number) > 1) {
+                        acc.push('...');
+                      }
+                    }
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    typeof item === 'string' ? (
+                      <span key={`ellipsis-${idx}`} className="px-1.5 py-1 text-slate-500 font-mono">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        onClick={() => handlePageChange(item)}
+                        disabled={loading}
+                        className={`w-8 h-8 rounded-xl text-xs font-bold font-mono transition-colors ${
+                          page === item
+                            ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                            : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80'
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+              </div>
+
+              {/* Next Button */}
+              <button
+                onClick={() => handlePageChange(page + 1)}
+                disabled={page >= totalPages || !hasMore || loading}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
+                title="Next Page"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
 

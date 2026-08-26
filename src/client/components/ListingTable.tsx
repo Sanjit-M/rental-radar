@@ -1,7 +1,7 @@
 import React from 'react';
 import { RentalListing, UserListingStatus } from '../../domain/types';
 import { RatingBadge } from './RatingBadge';
-import { ExternalLink, MessageCircle, Phone, Building2, Waves, Zap, User, Clock } from 'lucide-react';
+import { ExternalLink, MessageCircle, Phone, Building2, Waves, Zap, User, Clock, Layers } from 'lucide-react';
 
 interface ListingTableProps {
   listings: RentalListing[];
@@ -59,8 +59,18 @@ export const ListingTable: React.FC<ListingTableProps> = ({
 
                   <td className="py-3 px-4 font-medium text-white">
                     <div>{e.societyName || l.location}</div>
-                    <div className="text-[10px] text-slate-400 font-normal truncate max-w-[140px]">
-                      {l.groupName}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] text-slate-400 font-normal truncate max-w-[140px]">
+                        {l.groupName}
+                      </span>
+                      {l.postCount && l.postCount > 1 && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[9px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                          title={`Seen in ${l.postCount} groups: ${(l.groupNames || []).join(', ')}`}
+                        >
+                          <Layers className="w-2.5 h-2.5" /> Seen in {l.postCount} groups
+                        </span>
+                      )}
                     </div>
                   </td>
 

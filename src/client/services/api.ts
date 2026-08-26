@@ -1,4 +1,4 @@
-import { RentalListing, DashboardStats, UserListingStatus } from '../../domain/types';
+import { RentalListing, DashboardStats, UserListingStatus, PaginatedListingsResponse } from '../../domain/types';
 
 const API_BASE = '/api';
 
@@ -14,7 +14,7 @@ function getHeaders(): HeadersInit {
 }
 
 export const api = {
-  async getListings(params: Record<string, any> = {}): Promise<{ count: number; listings: RentalListing[] }> {
+  async getListings(params: Record<string, any> = {}): Promise<PaginatedListingsResponse> {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {

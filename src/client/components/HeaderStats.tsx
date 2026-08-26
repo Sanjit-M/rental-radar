@@ -5,14 +5,12 @@ import { Sparkles, Home, Clock, IndianRupee, RefreshCw, ShieldCheck, Waves } fro
 interface HeaderStatsProps {
   stats: DashboardStats | null;
   onTriggerScrape: () => void;
-  onReseed: () => void;
   isScraping: boolean;
 }
 
 export const HeaderStats: React.FC<HeaderStatsProps> = ({
   stats,
   onTriggerScrape,
-  onReseed,
   isScraping,
 }) => {
   return (
@@ -41,13 +39,6 @@ export const HeaderStats: React.FC<HeaderStatsProps> = ({
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2.5">
-            <button
-              onClick={onReseed}
-              title="Reset with Kadubeesanahalli sample data"
-              className="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-700/60 rounded-lg transition-colors"
-            >
-              Load Sample Data
-            </button>
             <button
               onClick={onTriggerScrape}
               disabled={isScraping}

@@ -11,16 +11,21 @@ export const app = new Hono();
 app.use('*', logger());
 app.use('*', cors());
 
-// Passcode Gate Middleware (Protects mutation/scrape endpoints if DASHBOARD_PASSCODE is configured)
+// Passcode Gate Middleware (Protects mutation endpoints if DASHBOARD_PASSCODE is configured, except scrape/seed endpoints per R4)
 app.use('*', async (c, next) => {
   const passcode = process.env.DASHBOARD_PASSCODE;
   if (!passcode) {
     return next();
   }
 
-  // Health and config are always public
+  // Health, config, and scraper/seed routes are always un-gated (Requirement R4)
   const path = c.req.path;
-  if (path.endsWith('/health') || path.endsWith('/config')) {
+  if (
+    path.endsWith('/health') ||
+    path.endsWith('/config') ||
+    path.includes('/scrape/') ||
+    path.endsWith('/scrape')
+  ) {
     return next();
   }
 
@@ -47,7 +52,7 @@ const configHandler = (c: any) =>
     ptpAnchor: PTP_COORDINATES,
     scoringWeights: SCORING_CONFIG,
     targetLocations: TARGET_LOCATIONS,
-    requiresPasscode: Boolean(process.env.DASHBOARD_PASSCODE),
+    requiresPasscode: false,
   });
 
 app.get('/config', configHandler);

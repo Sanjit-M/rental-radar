@@ -65,9 +65,9 @@ export const ListingCard: React.FC<ListingCardProps> = ({
             {listing.postCount && listing.postCount > 1 && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded-full"
-                title={`Cross-posted in: ${(listing.groupNames || []).join(', ')}`}
+                title={`Seen in ${listing.postCount} groups: ${(listing.groupNames || []).join(', ')}`}
               >
-                <Layers className="w-2.5 h-2.5" /> {listing.postCount} groups
+                <Layers className="w-2.5 h-2.5" /> Seen in {listing.postCount} groups
               </span>
             )}
 
@@ -175,8 +175,17 @@ export const ListingCard: React.FC<ListingCardProps> = ({
         {/* Expandable Post Description */}
         <div className="mb-4">
           <div
+            role="button"
+            tabIndex={0}
+            aria-expanded={isExpanded}
             onClick={() => setIsExpanded(!isExpanded)}
-            className="cursor-pointer group/desc bg-slate-900/60 hover:bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 rounded-xl p-3 transition-colors"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setIsExpanded(!isExpanded);
+              }
+            }}
+            className="cursor-pointer group/desc bg-slate-900/60 hover:bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 rounded-xl p-3 transition-colors focus:outline-none focus:border-cyan-500/50"
           >
             <p className={`text-xs text-slate-300 italic ${!isExpanded ? 'line-clamp-2' : ''} leading-relaxed`}>
               "{listing.rawText}"

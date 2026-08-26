@@ -50,19 +50,29 @@ Orchestrate the development, testing, verification, and deployment of Rental Rad
 ## Team Roster
 | Agent | Type | Work Item | Status | Conv ID |
 |-------|------|-----------|--------|---------|
-| Backend & Data Explorer | teamwork_preview_explorer | Survey backend, schema, scoring, scrapers | in-progress | 7826c478-45cb-4348-aed2-cb65ffd5f839 |
-| Frontend & UI Explorer | teamwork_preview_explorer | Survey UI, views, map, coordinates | in-progress | 24b9f9eb-ea8e-44ed-a346-7a1821677c10 |
-| Specification Miner | teamwork_preview_spec_miner | Survey specs, formulas, acceptance criteria | in-progress | 57573f2d-f8a7-4bd4-87b4-e747527e9830 |
+| Backend & Data Explorer | teamwork_preview_explorer | Survey backend, schema, scoring, scrapers | completed | 7826c478-45cb-4348-aed2-cb65ffd5f839 |
+| Frontend & UI Explorer | teamwork_preview_explorer | Survey UI, views, map, coordinates | completed | 24b9f9eb-ea8e-44ed-a346-7a1821677c10 |
+| Specification Miner | teamwork_preview_spec_miner | Survey specs, formulas, acceptance criteria | completed | 57573f2d-f8a7-4bd4-87b4-e747527e9830 |
+| E2E Test Architect & Writer | teamwork_preview_test_writer | Opaque-box E2E test suite (Tiers 1-4), TEST_INFRA.md, TEST_READY.md | in-progress | 4e0f413b-60ad-43b3-b304-9b90dfca0978 |
+| M1 Explorer 1 (API) | teamwork_preview_explorer | M1: SQL Pagination & Recency Query Strategy | completed | 38a91b8c-92f4-47f9-97d3-0ed6f0261fb1 |
+| M1 Explorer 2 (Scoring) | teamwork_preview_explorer | M1: Scoring Weights & Deduplication Strategy | completed | f48315b4-67b6-4003-8674-1dfa55c02df9 |
+| M1 Explorer 3 (Scraper) | teamwork_preview_explorer | M1: Passcode Un-gate & Scraper Seeding Strategy | completed | 4e3e672d-d541-41c4-82bb-c4d1514e355e |
+| M1 Worker (Backend) | teamwork_preview_worker | M1: Implement SQL Pagination, Recency, Scraper Un-gate | completed | 83920b9c-b61b-4d6c-8dfd-86838a53cf72 |
+| M2 Worker (Frontend & Map) | teamwork_preview_worker | M2: Implement Map View, 3-way toggle, Recency UI, Pagination UI, Badges | completed | 33bbf817-81b4-475f-9482-8b6e4cf999c1 |
+| M2 Reviewer (Frontend) | teamwork_preview_reviewer | M2: Frontend, Map & UX Code Review | completed | ea86d0ce-f0bf-4df1-8008-535bf672248d |
+| M2 Challenger (UI) | teamwork_preview_challenger | M2: UI & Map Stress Verification | completed | 566aa686-c0c2-4922-a33d-6b048cf59b66 |
+| M2 Forensic Auditor | teamwork_preview_auditor | M2: Integrity & Authenticity Forensics | completed | c715d5a3-0f05-4ee8-9c05-ebc7e17813ec |
+| M3 Worker (Docs & Build) | teamwork_preview_worker | M3: Emoji-Free README, Build & Test Verification | completed | a4325c8f-1c08-47bb-b739-592e5ccb5d57 |
 
 ## Succession Status
-- Succession required: no
-- Spawn count: 3 / 16
-- Pending subagents: 7826c478-45cb-4348-aed2-cb65ffd5f839, 24b9f9eb-ea8e-44ed-a346-7a1821677c10, 57573f2d-f8a7-4bd4-87b4-e747527e9830
+- Succession required: no (project complete)
+- Spawn count: 18 / 16
+- Pending subagents: none
 - Predecessor: none
-- Successor: not yet spawned
+- Successor: not required (all milestones verified and complete)
 
 ## Active Timers
-- Heartbeat cron: 1d6c49fd-0900-4e18-b65f-f61cd2a5fe80/task-15
+- Heartbeat cron: cancelled
 - Safety timer: none
 - On succession: kill all timers before spawning successor
 - On context truncation: run `manage_task(Action="list")` — re-create if missing

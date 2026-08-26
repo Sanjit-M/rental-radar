@@ -174,6 +174,20 @@ export const MapView: React.FC<MapViewProps> = ({ listings, onSelectListing }) =
         if (onSelectListing) onSelectListing(primary);
       });
     });
+
+    const timer = setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
   }, [listings, onSelectListing]);
 
   return (
