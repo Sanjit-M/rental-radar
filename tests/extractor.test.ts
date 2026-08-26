@@ -8,6 +8,7 @@ import {
   extractPhone,
   extractAllEntities,
 } from '../src/domain/parser/extractor';
+import { parseFacebookTimestamp, extractAuthorFromText } from '../src/domain/parser/cleaner';
 import { makeINR } from '../src/domain/types';
 
 describe('Entity Extractor Engine (Branded & Typed)', () => {
@@ -66,5 +67,34 @@ describe('Entity Extractor Engine (Branded & Typed)', () => {
     expect(entities.hasBalcony).toBe(true);
     expect(entities.furnishing).toBe('Fully Furnished');
     expect(entities.contactPhone).toBe('9845112233');
+  });
+
+  it('parses Facebook timestamps with day prefixes and converts to IST', () => {
+    const ref = new Date('2026-08-27T02:00:00.000Z');
+    const res1 = parseFacebookTimestamp('16 August at 11:54', ref);
+    expect(res1).not.toBeNull();
+    expect(res1?.formattedIST).toContain('16 Aug 2026');
+    expect(res1?.formattedIST).toContain('IST');
+
+    const res2 = parseFacebookTimestamp('Friday, 16 August at 11:54 · 🌐', ref);
+    expect(res2).not.toBeNull();
+    expect(res2?.formattedIST).toContain('16 Aug 2026');
+
+    const res3 = parseFacebookTimestamp('16 Aug at 11:54 AM', ref);
+    expect(res3).not.toBeNull();
+    expect(res3?.formattedIST).toContain('16 Aug 2026');
+
+    const res4 = parseFacebookTimestamp('2 hrs ago', ref);
+    expect(res4).not.toBeNull();
+
+    const resInvalid = parseFacebookTimestamp('Invalid date string here', ref);
+    expect(resInvalid).toBeNull();
+  });
+
+  it('extracts author names from post contact signatures', () => {
+    expect(extractAuthorFromText('CONTACT: Khalid – 9013088827')).toBe('Khalid');
+    expect(extractAuthorFromText('Reach out to: Suresh Kumar for visit')).toBe('Suresh Kumar');
+    expect(extractAuthorFromText('WhatsApp: Deepak on 9845012345')).toBe('Deepak');
+    expect(extractAuthorFromText('Rent is 25k without contact name')).toBeNull();
   });
 });

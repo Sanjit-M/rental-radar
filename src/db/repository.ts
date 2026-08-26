@@ -243,7 +243,9 @@ export const listingRepository = {
     await db.initSchema();
   },
 
-  async upsertListing(listing: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'>): Promise<RentalListing> {
+  async upsertListing(
+    listing: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string | undefined }
+  ): Promise<RentalListing> {
     const upsertSql = `
       INSERT INTO listings (
         fb_post_id, group_name, post_url, author_name, posted_time, raw_text,
@@ -253,7 +255,7 @@ export const listingRepository = {
         furnishing, is_kadubeesanahalli_direct, contact_phone,
         distance_km, inbound_mins, outbound_mins, two_way_avg_peak_mins,
         has_panathur_underpass_bottleneck, score, score_breakdown, tier,
-        user_status, updated_at
+        user_status, created_at, updated_at
       ) VALUES (
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
@@ -262,7 +264,7 @@ export const listingRepository = {
         ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?, ?,
-        ?, datetime('now')
+        ?, coalesce(?, datetime('now')), datetime('now')
       )
       ON CONFLICT(fb_post_id) DO UPDATE SET
         author_name=excluded.author_name,
@@ -308,6 +310,7 @@ export const listingRepository = {
       JSON.stringify(listing.scoreBreakdown),
       listing.tier,
       listing.userStatus || 'new',
+      listing.createdAt || null,
     ]);
 
     const row = await db.queryOne<RawDatabaseRow>('SELECT * FROM listings WHERE fb_post_id = ?', [listing.fbPostId]);

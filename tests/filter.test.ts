@@ -99,11 +99,13 @@ describe('Timestamp & IST Conversion (Cleaner)', () => {
   it('parses relative minute and hour tokens into absolute IST', () => {
     const ref = new Date('2026-08-27T01:30:00+05:30');
     const res28m = parseFacebookTimestamp('28 mins ago', ref);
-    expect(res28m.formattedIST).toContain('IST');
-    expect(res28m.date.getTime()).toBe(ref.getTime() - 28 * 60 * 1000);
+    expect(res28m).not.toBeNull();
+    expect(res28m?.formattedIST).toContain('IST');
+    expect(res28m?.date.getTime()).toBe(ref.getTime() - 28 * 60 * 1000);
 
     const res2h = parseFacebookTimestamp('2 hrs ago', ref);
-    expect(res2h.date.getTime()).toBe(ref.getTime() - 2 * 60 * 60 * 1000);
+    expect(res2h).not.toBeNull();
+    expect(res2h?.date.getTime()).toBe(ref.getTime() - 2 * 60 * 60 * 1000);
   });
 });
 

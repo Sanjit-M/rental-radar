@@ -69,7 +69,7 @@ async function purgeAndScrape() {
             furnishing, is_kadubeesanahalli_direct, contact_phone,
             distance_km, inbound_mins, outbound_mins, two_way_avg_peak_mins,
             has_panathur_underpass_bottleneck, score, score_breakdown, tier,
-            user_status, updated_at
+            user_status, created_at, updated_at
           ) VALUES (
             ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
@@ -78,7 +78,7 @@ async function purgeAndScrape() {
             ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, datetime('now')
+            ?, coalesce(?, datetime('now')), datetime('now')
           )
           ON CONFLICT(fb_post_id) DO UPDATE SET
             author_name=excluded.author_name,
@@ -123,6 +123,7 @@ async function purgeAndScrape() {
           JSON.stringify(l.scoreBreakdown),
           l.tier,
           l.userStatus || 'new',
+          l.createdAt || null,
         ],
       });
     }
