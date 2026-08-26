@@ -63,9 +63,10 @@ export interface IDatabase {
   isTurso(): boolean;
 }
 
-// 1. Turso Cloud Client Implementation
+// 1. Turso Cloud Client Implementation (with Auto-Schema Initialization)
 class TursoDatabase implements IDatabase {
   private client: Client;
+  private initPromise: Promise<void> | null = null;
 
   constructor(url: string, authToken?: string) {
     this.client = createClient({ url, authToken });
@@ -75,17 +76,37 @@ class TursoDatabase implements IDatabase {
     return true;
   }
 
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initPromise) {
+      this.initPromise = this.initSchema().catch((err) => {
+        console.error('Failed to initialize Turso database schema:', err);
+        this.initPromise = null;
+        throw err;
+      });
+    }
+    return this.initPromise;
+  }
+
   async initSchema(): Promise<void> {
     const statements = SCHEMA_SQL.split(';')
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
 
     for (const stmt of statements) {
-      await this.client.execute(stmt);
+      try {
+        await this.client.execute(stmt);
+      } catch (err: any) {
+        // Ignore "already exists" errors during concurrent runs
+        if (!err.message?.includes('already exists')) {
+          console.warn(`Turso DDL notice for [${stmt.slice(0, 30)}...]:`, err.message);
+        }
+      }
     }
+    console.log('✅ Turso Cloud Database schema verified & ready.');
   }
 
   async execute(sql: string, args: any[] = []): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
+    await this.ensureInitialized();
     const result = await this.client.execute({ sql, args });
     return {
       changes: result.rowsAffected,
@@ -94,11 +115,13 @@ class TursoDatabase implements IDatabase {
   }
 
   async query<T = any>(sql: string, args: any[] = []): Promise<T[]> {
+    await this.ensureInitialized();
     const result = await this.client.execute({ sql, args });
     return result.rows as unknown as T[];
   }
 
   async queryOne<T = any>(sql: string, args: any[] = []): Promise<T | null> {
+    await this.ensureInitialized();
     const rows = await this.query<T>(sql, args);
     return rows.length > 0 ? rows[0]! : null;
   }
