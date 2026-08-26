@@ -18,10 +18,22 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
   const textLower = text.toLowerCase();
   const textClean = textLower.replace(/[\s-]/g, '');
 
+  const spamLocations = ['dubai', 'uae', 'rigga', 'deira', 'sharjah', 'bur dubai', 'muraqqabat', 'al barsha', 'nahda'];
+  for (const spam of spamLocations) {
+    if (new RegExp(`\\b${escapeRegExp(spam)}\\b`, 'i').test(textLower)) {
+      return err(new FilterRejectionError(`Spam / non-Bangalore location: ${spam}`, text.slice(0, 100)));
+    }
+  }
+
   // 1. Check for matched target location or known society
   let matchedTarget: string | null = null;
 
   for (const target of TARGET_LOCATIONS) {
+    // Avoid false positive on "PTP ADMIN" / "PTP GROUP"
+    if (target === 'ptp' && /\bptp\s*(?:admin|moderator|group|rules?)\b/i.test(textLower) && !/\b(?:flat|room|bhk|rent|stay|near|in)\s+ptp\b/i.test(textLower)) {
+      continue;
+    }
+
     const targetPattern = new RegExp(`\\b${escapeRegExp(target)}\\b`, 'i');
     if (targetPattern.test(textLower)) {
       matchedTarget = capitalizeWords(target);

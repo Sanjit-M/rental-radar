@@ -172,6 +172,15 @@ export const EXCLUDED_LOCATIONS = [
   'mahadevapura',
   'kundalahalli',
   'hoodi',
+  'dubai',
+  'uae',
+  'rigga',
+  'deira',
+  'sharjah',
+  'bur dubai',
+  'muraqqabat',
+  'al barsha',
+  'nahda',
 ];
 
 export const TRAFFIC_CONFIG = {
