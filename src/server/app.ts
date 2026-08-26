@@ -22,14 +22,14 @@ app.use('*', async (c, next) => {
 
   // Health and config are always public
   const path = c.req.path;
-  if (path === '/api/health' || path === '/api/config') {
+  if (path.endsWith('/health') || path.endsWith('/config')) {
     return next();
   }
 
   // Check header or query parameter
   const clientPasscode = c.req.header('x-dashboard-passcode') || c.req.query('passcode');
   if (clientPasscode !== passcode) {
-    // If it's a GET request without passcode, allow read-only or prompt
+    // If it's a GET request without passcode, allow read-only
     if (c.req.method === 'GET' && !process.env.STRICT_READ_LOCK) {
       return next();
     }
@@ -39,22 +39,30 @@ app.use('*', async (c, next) => {
   return next();
 });
 
-// Health Check
+// Health Checks (Both /api/health and /health)
+app.get('/health', (c) => c.json({ status: 'ok', service: 'rental-radar-ts' }));
 app.get('/api/health', (c) => c.json({ status: 'ok', service: 'rental-radar-ts' }));
 
 // System Config & Public Flags
-app.get('/api/config', (c) =>
+const configHandler = (c: any) =>
   c.json({
     ptpAnchor: PTP_COORDINATES,
     scoringWeights: SCORING_CONFIG,
     targetLocations: TARGET_LOCATIONS,
     requiresPasscode: Boolean(process.env.DASHBOARD_PASSCODE),
-  })
-);
+  });
 
-// Routers
+app.get('/config', configHandler);
+app.get('/api/config', configHandler);
+
+// Routers (Mount both /api/* and direct /* to prevent Vercel rewrite prefix mismatches)
+app.route('/listings', listingsRouter);
 app.route('/api/listings', listingsRouter);
+
+app.route('/stats', statsRouter);
 app.route('/api/stats', statsRouter);
+
+app.route('/scrape', scrapeRouter);
 app.route('/api/scrape', scrapeRouter);
 
 // Auto-seed if database is empty on launch
