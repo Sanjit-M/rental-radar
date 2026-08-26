@@ -31,7 +31,12 @@ async function exportSession() {
     console.log('✅ Found active Facebook session cookies: c_user, xs, datr');
   }
 
-  const jsonString = JSON.stringify(storageState);
+  const compactState = {
+    cookies: storageState.cookies || [],
+    origins: [],
+  };
+
+  const jsonString = JSON.stringify(compactState);
   const base64String = Buffer.from(jsonString).toString('base64');
 
   console.log('\n' + '-'.repeat(65));
