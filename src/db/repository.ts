@@ -17,20 +17,21 @@ import {
   makeKilometers,
   makeMinutes,
   makeFbPostId,
+  SortBy,
 } from '../domain/types';
 
 /** Options for filtering and sorting rental listings. */
 export interface ListingQueryOptions {
-  readonly page?: number;
-  readonly limit?: number;
-  readonly minScore?: number;
-  readonly maxRent?: number;
-  readonly bhkType?: string;
-  readonly furnishing?: string;
-  readonly userStatus?: string;
-  readonly recency?: string;
-  readonly search?: string;
-  readonly sortBy?: 'score_desc' | 'rent_asc' | 'commute_asc' | 'newest';
+  readonly page?: number | undefined;
+  readonly limit?: number | undefined;
+  readonly minScore?: number | undefined;
+  readonly maxRent?: number | undefined;
+  readonly bhkType?: string | undefined;
+  readonly furnishing?: string | undefined;
+  readonly userStatus?: string | undefined;
+  readonly recency?: string | undefined;
+  readonly search?: string | undefined;
+  readonly sortBy?: SortBy | undefined;
 }
 
 /**
@@ -114,6 +115,8 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
     isMaleBachelorAllowed: true,
     isFemaleOnly: /female\s*only|girls?\s*only/i.test(row.raw_text),
     isWalkingDistance: /walking\s*distance|walk\s*to\s*ptp/i.test(row.raw_text),
+    // SAFETY: `furnishing` column is constrained by the INSERT schema to one of
+    // the four FurnishingStatus literals. The DB is the sole write path.
     furnishing: row.furnishing as FurnishingStatus,
     isKadubeesanahalliDirect: Boolean(row.is_kadubeesanahalli_direct),
     contactPhone: row.contact_phone || null,
@@ -129,7 +132,7 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
 
   let scoreBreakdown: ScoringBreakdown;
   try {
-    scoreBreakdown = JSON.parse(row.score_breakdown);
+    scoreBreakdown = JSON.parse(row.score_breakdown) as ScoringBreakdown;
   } catch {
     scoreBreakdown = {
       base: 50,
@@ -149,6 +152,8 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
     };
   }
 
+  // SAFETY: DB `id` column is an INTEGER PRIMARY KEY; Number() coercion is safe
+  // and callers cannot construct a ListingId without going through this adapter.
   const id = Number(row.id) as ListingId;
   const fbPostId = makeFbPostId(row.fb_post_id);
 
@@ -161,12 +166,15 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
     postedTime: row.posted_time || 'Recently',
     rawText: row.raw_text,
     location: row.location,
+    // SAFETY: `bhk_type` column is constrained by INSERT schema to the BHKType union.
     bhkType: row.bhk_type as BHKType,
     entities,
     commute,
     score: Number(row.score),
     scoreBreakdown,
+    // SAFETY: `tier` column is written by ratingEngine.ts which produces only RatingTier values.
     tier: row.tier as RatingTier,
+    // SAFETY: `user_status` column is constrained by PATCH /status route to UserListingStatus.
     userStatus: row.user_status as UserListingStatus,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

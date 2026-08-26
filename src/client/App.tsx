@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { RentalListing, DashboardStats, UserListingStatus } from '../domain/types';
+import { RentalListing, DashboardStats, UserListingStatus, SortBy } from '../domain/types';
 import { FilterBar } from './components/FilterBar';
 import { ListingCard } from './components/ListingCard';
 import { ListingTable } from './components/ListingTable';
@@ -42,7 +42,7 @@ export const App: React.FC = () => {
   const [furnishing, setFurnishing] = useState('all');
   const [userStatus, setUserStatus] = useState('all');
   const [recency, setRecency] = useState('all');
-  const [sortBy, setSortBy] = useState('score_desc');
+  const [sortBy, setSortBy] = useState<SortBy>('score_desc');
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'map'>('grid');
 
   // Modal State
@@ -52,80 +52,82 @@ export const App: React.FC = () => {
     async (targetPage = 1, append = false) => {
       setLoading(true);
       setError(null);
-      try {
-        const data = await api.getListings({
-          page: targetPage,
-          limit: 12,
-          minScore,
-          maxRent,
-          sortBy,
-          ...(bhkType !== 'all' ? { bhkType } : {}),
-          ...(furnishing !== 'all' ? { furnishing } : {}),
-          ...(userStatus !== 'all' ? { userStatus } : {}),
-          ...(recency !== 'all' ? { recency } : {}),
-          ...(search.trim() ? { search: search.trim() } : {}),
-        });
 
-        if (append) {
-          setListings((prev) => [...prev, ...data.listings]);
-        } else {
-          setListings(data.listings);
-        }
+      const result = await api.getListings({
+        page: targetPage,
+        limit: 12,
+        minScore,
+        maxRent,
+        sortBy,
+        ...(bhkType !== 'all' ? { bhkType } : {}),
+        ...(furnishing !== 'all' ? { furnishing } : {}),
+        ...(userStatus !== 'all' ? { userStatus } : {}),
+        ...(recency !== 'all' ? { recency } : {}),
+        ...(search.trim() ? { search: search.trim() } : {}),
+      });
 
-        setPage(data.page || 1);
-        setTotalCount(data.totalCount || data.listings.length);
-        setTotalPages(data.totalPages || 1);
-        setHasMore(Boolean(data.hasMore));
-      } catch (err: any) {
-        console.error('Failed to fetch listings:', err);
-        setError(err.message || 'Failed to fetch listings');
-      } finally {
+      if (result._tag === 'err') {
+        console.error('Failed to fetch listings:', result.error);
+        setError(result.error.message);
         setLoading(false);
+        return;
       }
+
+      const data = result.value;
+      if (append) {
+        setListings((prev) => [...prev, ...data.listings]);
+      } else {
+        setListings(data.listings);
+      }
+      setPage(data.page || 1);
+      setTotalCount(data.totalCount || data.listings.length);
+      setTotalPages(data.totalPages || 1);
+      setHasMore(Boolean(data.hasMore));
+      setLoading(false);
     },
     [minScore, maxRent, bhkType, furnishing, userStatus, recency, search, sortBy]
   );
 
-  const fetchStats = async () => {
-    try {
-      const data = await api.getStats();
-      setStats(data);
-    } catch {
-      // Non-critical stats error
+  const fetchStats = useCallback(async () => {
+    const result = await api.getStats();
+    if (result._tag === 'ok') {
+      setStats(result.value);
     }
-  };
+    // Non-critical: silently ignore stats fetch failures
+  }, []);
 
   useEffect(() => {
     fetchListings(1, false);
     fetchStats();
-  }, [fetchListings]);
+  }, [fetchListings, fetchStats]);
 
   const handleStatusChange = async (id: number, status: UserListingStatus) => {
-    try {
-      setListings((prev) =>
-        prev.map((l) => (l.id === id ? { ...l, userStatus: status } : l))
-      );
-
-      await api.updateListingStatus(id, status);
-      fetchStats();
-    } catch (err) {
-      console.error('Status update failed:', err);
+    // Optimistic update
+    setListings((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, userStatus: status } : l))
+    );
+    const result = await api.updateListingStatus(id, status);
+    if (result._tag === 'err') {
+      console.error('Status update failed:', result.error.message);
+      // Revert optimistic update on failure
+      fetchListings(page, false);
+      return;
     }
+    fetchStats();
   };
 
   const handleTriggerScrape = async () => {
     setScraping(true);
     setScrapeNotice(null);
-    try {
-      const data = await api.triggerScrape();
-      setScrapeNotice(data.message || 'Scrape cycle complete!');
+    const result = await api.triggerScrape();
+    if (result._tag === 'err') {
+      setScrapeNotice(`Scrape failed: ${result.error.message}`);
+    } else {
+      setScrapeNotice(result.value.message || 'Scrape cycle complete!');
       fetchListings(1, false);
       fetchStats();
-    } catch {
-      setScrapeNotice('Scrape trigger failed. Please check internet connection.');
-    } finally {
-      setScraping(false);
     }
+    setScraping(false);
   };
 
   const handleResetFilters = () => {

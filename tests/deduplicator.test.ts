@@ -88,8 +88,8 @@ describe('Cross-Group Deduplication Engine', () => {
 
     const deduplicated = deduplicateListings([postA, postB, uniquePost]);
     expect(deduplicated.length).toBe(2);
-    expect(deduplicated[0].postCount).toBe(2);
-    expect(deduplicated[0].groupNames).toContain('Group A');
-    expect(deduplicated[0].groupNames).toContain('Group B');
+    expect(deduplicated[0]?.postCount).toBe(2);
+    expect(deduplicated[0]?.groupNames).toContain('Group A');
+    expect(deduplicated[0]?.groupNames).toContain('Group B');
   });
 });

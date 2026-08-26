@@ -239,9 +239,9 @@ describe('Milestone 1 — Backend Pagination & Data Engine Tests', () => {
 
       const deduplicated = deduplicateListings([post1, post2]);
       expect(deduplicated).toHaveLength(1);
-      expect(deduplicated[0].postCount).toBe(2);
-      expect(deduplicated[0].groupNames).toContain('Group A');
-      expect(deduplicated[0].groupNames).toContain('Group B');
+      expect(deduplicated[0]?.postCount).toBe(2);
+      expect(deduplicated[0]?.groupNames).toContain('Group A');
+      expect(deduplicated[0]?.groupNames).toContain('Group B');
     });
   });
 

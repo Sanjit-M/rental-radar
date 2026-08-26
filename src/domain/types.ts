@@ -76,6 +76,9 @@ export type RatingTier =
   | '⚡ Moderate Match'    // 55 - 74
   | '⚠️ Low Match';        // < 55
 
+/** Sort ordering for the listings endpoint. */
+export type SortBy = 'score_desc' | 'rent_asc' | 'commute_asc' | 'newest';
+
 /** Commute metrics simulated for weekday peak hours to PTP. */
 export interface CommuteWindow {
   readonly distanceKm: Kilometers;
@@ -121,8 +124,8 @@ export interface ExtractedEntities {
   readonly furnishing: FurnishingStatus;
   readonly isKadubeesanahalliDirect: boolean;
   readonly contactPhone: string | null;
-  readonly societyLat?: number;
-  readonly societyLon?: number;
+  readonly societyLat?: number | undefined;
+  readonly societyLon?: number | undefined;
 }
 
 /** Validated filter details. */
@@ -136,8 +139,8 @@ export interface RentalListing {
   readonly id: ListingId;
   readonly fbPostId: FbPostId;
   readonly groupName: string;
-  readonly groupNames?: string[];      // Multiple groups if cross-posted
-  readonly postCount?: number;          // Number of times cross-posted
+  readonly groupNames?: string[] | undefined;      // Multiple groups if cross-posted
+  readonly postCount?: number | undefined;          // Number of times cross-posted
   readonly postUrl: string;
   readonly authorName: string;
   readonly postedTime: string;

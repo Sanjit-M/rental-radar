@@ -1,7 +1,17 @@
 import { Hono } from 'hono';
 import { listingRepository, ListingQueryOptions } from '../../db/repository';
 import { seedInitialData } from '../../scraper/groupScraper';
-import { UserListingStatus } from '../../domain/types';
+import { UserListingStatus, SortBy } from '../../domain/types';
+
+const VALID_SORT_VALUES: readonly SortBy[] = ['score_desc', 'rent_asc', 'commute_asc', 'newest'];
+
+function parseSortBy(raw: string | undefined): SortBy {
+  // Narrow the raw query param against the exhaustive SortBy union.
+  // Any unrecognised value falls through to the safe default.
+  return VALID_SORT_VALUES.includes(raw as SortBy)
+    ? (raw as SortBy)
+    : 'score_desc';
+}
 
 export const listingsRouter = new Hono();
 
@@ -14,20 +24,23 @@ listingsRouter.get('/', async (c) => {
     const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
     const limit = isNaN(parsedLimit) || parsedLimit < 1 ? 12 : Math.min(50, parsedLimit);
 
-    const minScore = c.req.query('minScore') ? parseInt(c.req.query('minScore')!, 10) : undefined;
-    const maxRent = c.req.query('maxRent') ? parseInt(c.req.query('maxRent')!, 10) : undefined;
+    const rawMinScore = c.req.query('minScore');
+    const rawMaxRent = c.req.query('maxRent');
+    const parsedMinScore = rawMinScore ? parseInt(rawMinScore, 10) : NaN;
+    const parsedMaxRent = rawMaxRent ? parseInt(rawMaxRent, 10) : NaN;
+
     const bhkType = c.req.query('bhkType') || undefined;
     const furnishing = c.req.query('furnishing') || undefined;
     const userStatus = c.req.query('userStatus') || undefined;
     const recency = c.req.query('recency') || undefined;
     const search = c.req.query('search') || undefined;
-    const sortBy = (c.req.query('sortBy') as any) || 'score_desc';
+    const sortBy = parseSortBy(c.req.query('sortBy'));
 
     const options: ListingQueryOptions = {
       page,
       limit,
-      minScore: isNaN(minScore as any) ? undefined : minScore,
-      maxRent: isNaN(maxRent as any) ? undefined : maxRent,
+      minScore: isNaN(parsedMinScore) ? undefined : parsedMinScore,
+      maxRent: isNaN(parsedMaxRent) ? undefined : parsedMaxRent,
       bhkType,
       furnishing,
       userStatus,
@@ -36,18 +49,19 @@ listingsRouter.get('/', async (c) => {
       sortBy,
     };
 
+
     let response = await listingRepository.getPaginatedListings(options);
 
     // Auto-seed if database is completely empty on first launch
     if (
       response.totalCount === 0 &&
-      !search &&
-      minScore === undefined &&
-      maxRent === undefined &&
-      (!recency || recency === 'all') &&
-      (!bhkType || bhkType === 'all') &&
-      (!furnishing || furnishing === 'all') &&
-      (!userStatus || userStatus === 'all')
+      !options.search &&
+      options.minScore === undefined &&
+      options.maxRent === undefined &&
+      (!options.recency || options.recency === 'all') &&
+      (!options.bhkType || options.bhkType === 'all') &&
+      (!options.furnishing || options.furnishing === 'all') &&
+      (!options.userStatus || options.userStatus === 'all')
     ) {
       const stats = await listingRepository.getStats();
       if (stats.totalListings === 0) {

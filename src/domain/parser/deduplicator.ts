@@ -79,25 +79,31 @@ export function deduplicateListings(listings: RentalListing[]): RentalListing[] 
 
     if (existingIndex >= 0) {
       const existing = merged[existingIndex];
+      // Guard is proved by findIndex returning >= 0, but noUncheckedIndexedAccess
+      // makes array access T | undefined. Skip the merge if somehow undefined.
+      if (existing === undefined) {
+        merged.push({ ...current, groupNames: [current.groupName], postCount: 1 });
+        continue;
+      }
+
       const groups = new Set<string>([
         existing.groupName,
-        ...(existing.groupNames || []),
+        ...(existing.groupNames ?? []),
         current.groupName,
-        ...(current.groupNames || []),
+        ...(current.groupNames ?? []),
       ]);
 
       const groupNames = Array.from(groups);
 
-      // Merge into canonical listing keeping highest score & most complete entity info
+      // Merge into canonical listing keeping most complete entity info
       merged[existingIndex] = {
         ...existing,
         groupNames,
         postCount: groupNames.length,
-        // Prefer explicit phone number if available
         entities: {
           ...existing.entities,
-          contactPhone: existing.entities.contactPhone || current.entities.contactPhone,
-          societyName: existing.entities.societyName || current.entities.societyName,
+          contactPhone: existing.entities.contactPhone ?? current.entities.contactPhone,
+          societyName: existing.entities.societyName ?? current.entities.societyName,
         },
       };
     } else {

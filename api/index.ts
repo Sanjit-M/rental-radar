@@ -37,7 +37,7 @@ app.use('*', cors());
 function getDbClient() {
   const url = process.env.TURSO_DATABASE_URL || 'file:data/listings.db';
   const authToken = process.env.TURSO_AUTH_TOKEN;
-  return createClient({ url, authToken });
+  return authToken ? createClient({ url, authToken }) : createClient({ url });
 }
 
 const SCHEMA_SQL = `
@@ -480,17 +480,17 @@ const statsHandler = async (c: any) => {
         SUM(CASE WHEN is_brokerage = 0 THEN 1 ELSE 0 END) as direct_owner_count
       FROM listings
     `);
-    const row = statsRes.rows[0] || {};
+    const row = (statsRes.rows[0] as Record<string, unknown> | undefined) ?? {};
 
     return c.json({
-      totalListings: Number(row.total_listings || 0),
-      unicornMatches: Number(row.unicorn_matches || 0),
-      greatMatches: Number(row.great_matches || 0),
-      avgRent: Math.round(Number(row.avg_rent || 0)),
-      avgPeakCommuteMins: Math.round(Number(row.avg_commute || 0)),
-      gatedCount: Number(row.gated_count || 0),
-      poolCount: Number(row.pool_count || 0),
-      directOwnerCount: Number(row.direct_owner_count || 0),
+      totalListings: Number(row['total_listings'] ?? 0),
+      unicornMatches: Number(row['unicorn_matches'] ?? 0),
+      greatMatches: Number(row['great_matches'] ?? 0),
+      avgRent: Math.round(Number(row['avg_rent'] ?? 0)),
+      avgPeakCommuteMins: Math.round(Number(row['avg_commute'] ?? 0)),
+      gatedCount: Number(row['gated_count'] ?? 0),
+      poolCount: Number(row['pool_count'] ?? 0),
+      directOwnerCount: Number(row['direct_owner_count'] ?? 0),
       lastScrapeTime: null,
     });
   } catch (err: any) {

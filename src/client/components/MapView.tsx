@@ -163,11 +163,16 @@ export const MapView: React.FC<MapViewProps> = ({ listings, onSelectListing }) =
 
     // Step 3: Add one marker per coordinate group
     coordsMap.forEach((groupListings, key) => {
-      const [latStr, lonStr] = key.split(',');
-      const lat = parseFloat(latStr);
-      const lon = parseFloat(lonStr);
+      // noUncheckedIndexedAccess: split always produces at least 1 element for non-empty keys,
+      // but we parse defensively.
+      const parts = key.split(',');
+      const lat = parseFloat(parts[0] ?? '0');
+      const lon = parseFloat(parts[1] ?? '0');
       const primary = groupListings[0];
       const count = groupListings.length;
+
+      // Guard: skip empty groups (should not occur, but noUncheckedIndexedAccess requires it)
+      if (primary === undefined) return;
 
       const scoreColor =
         primary.score >= 90
@@ -207,7 +212,7 @@ export const MapView: React.FC<MapViewProps> = ({ listings, onSelectListing }) =
         iconAnchor: [45, 13],
       });
 
-      const societyLabel = primary.entities.societyName || primary.location || 'Near PTP';
+      const societyLabel = primary.entities.societyName ?? primary.location ?? 'Near PTP';
       const rentLabel = primary.entities.rent
         ? `₹${primary.entities.rent.toLocaleString('en-IN')}/mo`
         : 'Contact';
@@ -242,6 +247,7 @@ export const MapView: React.FC<MapViewProps> = ({ listings, onSelectListing }) =
         if (onSelectListing) onSelectListing(primary);
       });
     });
+
 
     // Invalidate size after markers are placed to ensure correct tile rendering
     mapInstanceRef.current.invalidateSize();

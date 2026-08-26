@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS scrape_logs (
 
 /** Abstract Database Interface for Dual-Mode Execution. */
 export interface IDatabase {
-  execute(sql: string, args?: any[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }>;
+  execute(sql: string, args?: any[]): Promise<{ changes: number; lastInsertRowid?: number | bigint | undefined }>;
   query<T = any>(sql: string, args?: any[]): Promise<T[]>;
   queryOne<T = any>(sql: string, args?: any[]): Promise<T | null>;
   initSchema(): Promise<void>;
@@ -67,7 +67,7 @@ class WebLibSqlDatabase implements IDatabase {
 
   constructor(url: string, authToken?: string) {
     this.isCloud = !url.startsWith('file:');
-    this.client = createClient({ url, authToken });
+    this.client = authToken ? createClient({ url, authToken }) : createClient({ url });
   }
 
   isTurso(): boolean {
@@ -100,7 +100,7 @@ class WebLibSqlDatabase implements IDatabase {
     }
   }
 
-  async execute(sql: string, args: any[] = []): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
+  async execute(sql: string, args: any[] = []): Promise<{ changes: number; lastInsertRowid?: number | bigint | undefined }> {
     await this.ensureInitialized();
     const result = await this.client.execute({ sql, args });
     return {

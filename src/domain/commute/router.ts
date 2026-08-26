@@ -62,10 +62,11 @@ export function calculatePeakScooterCommute(
       }
     }
 
-    // Default to Kadubeesanahalli center
+    // Default to Kadubeesanahalli center (or PTP if the key is missing)
     if (lat === undefined || lon === undefined) {
-      lat = LOCALITY_COORDS['kadubeesanahalli'].lat;
-      lon = LOCALITY_COORDS['kadubeesanahalli'].lon;
+      const fallback = LOCALITY_COORDS['kadubeesanahalli'];
+      lat = fallback?.lat ?? PTP_COORDINATES.lat;
+      lon = fallback?.lon ?? PTP_COORDINATES.lon;
     }
   }
 

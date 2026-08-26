@@ -1,5 +1,6 @@
 import React from 'react';
 import { LayoutGrid, List, Map, Search, RotateCcw, Clock } from 'lucide-react';
+import { SortBy } from '../../domain/types';
 
 interface FilterBarProps {
   search: string;
@@ -16,8 +17,8 @@ interface FilterBarProps {
   onUserStatusChange: (value: string) => void;
   recency: string;
   onRecencyChange: (value: string) => void;
-  sortBy: string;
-  onSortByChange: (value: string) => void;
+  sortBy: SortBy;
+  onSortByChange: (value: SortBy) => void;
   viewMode: 'grid' | 'table' | 'map';
   onViewModeChange: (mode: 'grid' | 'table' | 'map') => void;
   onResetFilters: () => void;
@@ -66,7 +67,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <span>Sort by:</span>
             <select
               value={sortBy}
-              onChange={(e) => onSortByChange(e.target.value)}
+              onChange={(e) => onSortByChange(e.target.value as SortBy)}
               className="bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
               <option value="score_desc">Rating Score (High to Low)</option>

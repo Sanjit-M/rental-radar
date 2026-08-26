@@ -135,11 +135,11 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         for (const key of expectedSocieties) {
           const society = KNOWN_SOCIETIES[key];
           expect(society).toBeDefined();
-          expect(society.lat).toBeGreaterThan(12.92);
-          expect(society.lat).toBeLessThan(12.96);
-          expect(society.lon).toBeGreaterThan(77.68);
-          expect(society.lon).toBeLessThan(77.72);
-          expect(society.isGated).toBe(true);
+          expect(society?.lat).toBeGreaterThan(12.92);
+          expect(society?.lat).toBeLessThan(12.96);
+          expect(society?.lon).toBeGreaterThan(77.68);
+          expect(society?.lon).toBeLessThan(77.72);
+          expect(society?.isGated).toBe(true);
         }
       });
 
@@ -147,8 +147,8 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         const postText = 'Looking for flatmate in Goyal Orchid Lakeview, Kadubeesanahalli with pool and gym';
         const entities = extractAllEntities(postText);
         expect(entities.societyName).toBe('Goyal Orchid Lakeview');
-        expect(entities.societyLat).toBe(KNOWN_SOCIETIES.orchidlakeview.lat);
-        expect(entities.societyLon).toBe(KNOWN_SOCIETIES.orchidlakeview.lon);
+        expect(entities.societyLat).toBe(KNOWN_SOCIETIES.orchidlakeview?.lat);
+        expect(entities.societyLon).toBe(KNOWN_SOCIETIES.orchidlakeview?.lon);
       });
 
       it('F1.4: assigns correct visual score badge tiers matching score brackets (Unicorn, Great, Moderate, Low)', () => {
@@ -294,8 +294,8 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
 
         const deduplicated = deduplicateListings([post1, post2, post3]);
         expect(deduplicated).toHaveLength(1);
-        expect(deduplicated[0].postCount).toBe(3);
-        expect(deduplicated[0].groupNames).toEqual(
+        expect(deduplicated[0]?.postCount).toBe(3);
+        expect(deduplicated[0]?.groupNames).toEqual(
           expect.arrayContaining(['Flatmates PTP', 'Bangalore Rentals', 'Kadubeesanahalli Flats'])
         );
       });
@@ -519,9 +519,9 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
     describe('R1: Geospatial Boundary & Corner Cases', () => {
       it('B1.1: falls back to default Kadubeesanahalli coordinates when society is unrecognized', () => {
         const fallback = LOCALITY_COORDS.kadubeesanahalli;
-        expect(fallback.lat).toBeCloseTo(12.938, 3);
-        expect(fallback.lon).toBeCloseTo(77.6925, 3);
-        expect(fallback.isDirect).toBe(true);
+        expect(fallback?.lat).toBeCloseTo(12.938, 3);
+        expect(fallback?.lon).toBeCloseTo(77.6925, 3);
+        expect(fallback?.isDirect).toBe(true);
       });
 
       it('B1.2: correctly handles listing coordinates exactly at PTP main gate (0 distance)', () => {
@@ -539,8 +539,8 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
       it('B1.3: handles Panathur Road coordinates across railway underpass and applies congestion penalty', () => {
         const panathurCoords = LOCALITY_COORDS['panathur road'];
         const commute = calculatePeakScooterCommute(
-          panathurCoords.lat,
-          panathurCoords.lon,
+          panathurCoords?.lat,
+          panathurCoords?.lon,
           'Panathur Road',
           false
         );
@@ -606,8 +606,8 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
 
         const merged = deduplicateListings(posts);
         expect(merged).toHaveLength(1);
-        expect(merged[0].postCount).toBe(5);
-        expect(merged[0].groupNames).toHaveLength(5);
+        expect(merged[0]?.postCount).toBe(5);
+        expect(merged[0]?.groupNames).toHaveLength(5);
       });
 
       it('B2.4: backfills missing phone number from cross-posted duplicate into canonical record', () => {
@@ -629,7 +629,7 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
 
         const merged = deduplicateListings([postWithoutPhone, postWithPhone]);
         expect(merged).toHaveLength(1);
-        expect(merged[0].entities.contactPhone).toBe('9123456789');
+        expect(merged[0]?.entities.contactPhone).toBe('9123456789');
       });
 
       it('B2.5: handles recency filter parsing edge cases across all standard time tokens', () => {
@@ -975,6 +975,9 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
 
     it('C5: Society coordinate flow into commute simulation and scoring breakdown', () => {
       const society = KNOWN_SOCIETIES.sobhairis;
+      expect(society).toBeDefined();
+      if (!society) return;
+
       const commute = calculatePeakScooterCommute(
         society.lat,
         society.lon,
@@ -1163,11 +1166,11 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
       ]);
 
       expect(merged).toHaveLength(1);
-      expect(merged[0].postCount).toBe(3);
-      expect(merged[0].groupNames).toHaveLength(3);
-      expect(merged[0].groupNames).toContain('Flats in Marathahalli & Kadubeesanahalli');
-      expect(merged[0].groupNames).toContain('Flat and Flatmates Bangalore Chapter');
-      expect(merged[0].groupNames).toContain('PTP & Bellandur Accommodations');
+      expect(merged[0]?.postCount).toBe(3);
+      expect(merged[0]?.groupNames).toHaveLength(3);
+      expect(merged[0]?.groupNames).toContain('Flats in Marathahalli & Kadubeesanahalli');
+      expect(merged[0]?.groupNames).toContain('Flat and Flatmates Bangalore Chapter');
+      expect(merged[0]?.groupNames).toContain('PTP & Bellandur Accommodations');
     });
 
     // -----------------------------------------------------------------------
