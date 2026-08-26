@@ -64,4 +64,24 @@ describe('Location & Post Filter Rules (Correct-by-Construction)', () => {
       expect(resultExcluded.error._tag).toBe('FilterRejectionError');
     }
   });
+
+  it('allows Kadubeesanahalli and PTP posts that mention nearby hubs as transit/proximity references', () => {
+    const post1 = '1 BHK in Kadubeesanahalli, 5 mins from Bellandur EcoSpace and Marathahalli bridge';
+    const loc1 = isValidLocation(post1);
+    expect(loc1._tag).toBe('ok');
+    if (loc1._tag === 'ok') expect(loc1.value).toBe('Kadubeesanahalli');
+
+    const post2 = 'Looking for flatmate in Sobha Iris, Kadubeesanahalli. Easy commute to Marathahalli & Sarjapur';
+    const res2 = passesAllFilters(post2);
+    expect(res2._tag).toBe('ok');
+    if (res2._tag === 'ok') {
+      expect(res2.value.location).toBe('Kadubeesanahalli');
+      expect(res2.value.bhkType).toBe('Private Room / Flatmate');
+    }
+
+    const post3 = 'Flat in Bellandur, close to Kadubeesanahalli';
+    const res3 = passesAllFilters(post3);
+    expect(res3._tag).toBe('err');
+  });
 });
+

@@ -453,6 +453,9 @@ const getListingsHandler = async (c: any) => {
         hasMore: false,
         listings: [],
         error: err?.message || String(err),
+        hint: process.env.TURSO_DATABASE_URL
+          ? undefined
+          : 'Please configure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in your Vercel project environment variables.',
       },
       500
     );

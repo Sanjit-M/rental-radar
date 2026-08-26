@@ -20,3 +20,5 @@ data/*.db-shm
 .env.*
 .DS_Store
 *.log
+.vercel
+.env*

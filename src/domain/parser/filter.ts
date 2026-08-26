@@ -1,17 +1,61 @@
-import { TARGET_LOCATIONS, EXCLUDED_LOCATIONS } from '../config';
+import { TARGET_LOCATIONS, EXCLUDED_LOCATIONS, KNOWN_SOCIETIES } from '../config';
 import { BHKType, ValidatedPostDetails, Result, ok, err, FilterRejectionError } from '../types';
 
 /**
  * Checks whether the post text explicitly matches Kadubeesanahalli / PTP area
  * and strictly excludes non-target locations (e.g. Bellandur, Marathahalli).
  *
+ * Priority & Proximity Rules:
+ * 1. Checks if text contains explicit target locations or known PTP/Kadubeesanahalli societies.
+ * 2. If target location is matched, ensures post is not solely located in an excluded area
+ *    (allows transit references like "5 mins to Bellandur" or "near Marathahalli bridge").
+ * 3. If no target location is matched and excluded location is found, rejects with FilterRejectionError.
+ *
  * @param text - The raw or cleaned post text.
  * @returns Result with matched location name or FilterRejectionError.
  */
 export function isValidLocation(text: string): Result<string, FilterRejectionError> {
   const textLower = text.toLowerCase();
+  const textClean = textLower.replace(/[\s-]/g, '');
 
-  // 1. Check for hard-excluded locations (unless explicitly negated)
+  // 1. Check for matched target location or known society
+  let matchedTarget: string | null = null;
+
+  for (const target of TARGET_LOCATIONS) {
+    const targetPattern = new RegExp(`\\b${escapeRegExp(target)}\\b`, 'i');
+    if (targetPattern.test(textLower)) {
+      matchedTarget = capitalizeWords(target);
+      break;
+    }
+  }
+
+  if (!matchedTarget) {
+    for (const [key, society] of Object.entries(KNOWN_SOCIETIES)) {
+      if (textClean.includes(key)) {
+        matchedTarget = society.name;
+        break;
+      }
+    }
+  }
+
+  // 2. If target location was found, verify it is not primarily in an excluded location
+  if (matchedTarget) {
+    // Check if the post explicitly states it is located in an excluded area (e.g. "Flat in Bellandur")
+    // without being in Kadubeesanahalli or a known Kadubeesanahalli society
+    for (const excl of EXCLUDED_LOCATIONS) {
+      const explicitExclLocationPattern = new RegExp(`\\b(?:flat|room|apartment|house|stay|located)\\s+(?:in|at)\\s+${escapeRegExp(excl)}\\b`, 'i');
+      if (explicitExclLocationPattern.test(textLower)) {
+        const hasDirectKadubeesanahalli = /\b(?:in|at|near|opposite)\s+(?:kadubeesanahalli|ptp|prestige tech park)\b/i.test(textLower);
+        if (!hasDirectKadubeesanahalli) {
+          return err(new FilterRejectionError(`Excluded location: ${excl}`, text.slice(0, 100)));
+        }
+      }
+    }
+
+    return ok(matchedTarget);
+  }
+
+  // 3. No target location found: check if explicitly in an excluded location
   for (const excl of EXCLUDED_LOCATIONS) {
     const wordPattern = new RegExp(`\\b${escapeRegExp(excl)}\\b`, 'i');
     if (wordPattern.test(textLower)) {
@@ -19,14 +63,6 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
       if (!negatedPattern.test(textLower)) {
         return err(new FilterRejectionError(`Excluded location: ${excl}`, text.slice(0, 100)));
       }
-    }
-  }
-
-  // 2. Check for target allowed locations
-  for (const target of TARGET_LOCATIONS) {
-    const targetPattern = new RegExp(`\\b${escapeRegExp(target)}\\b`, 'i');
-    if (targetPattern.test(textLower)) {
-      return ok(capitalizeWords(target));
     }
   }
 
@@ -117,15 +153,15 @@ export function isRentalOffering(text: string): boolean {
   }
 
   const pureSeekerPatterns = [
-    /^looking for (?:a )?(?:1\s*bhk|flat|apartment|room)/i,
-    /^i need a (?:1\s*bhk|flat|apartment|room)/i,
-    /^urgently required (?:1\s*bhk|flat)/i,
-    /^searching for flat/i,
+    /^looking for (?:a )?(?:1\s*bhk|flat|apartment|room)\b/i,
+    /^i need a (?:1\s*bhk|flat|apartment|room)\b/i,
+    /^urgently required (?:1\s*bhk|flat)\b/i,
+    /^searching for flat\b/i,
   ];
 
   for (const pattern of pureSeekerPatterns) {
     if (pattern.test(textLower.trim())) {
-      if (/\blooking for (?:a )?(?:male\s+)?flatmate (?:in|for) (?:my|our|a pre-occupied)\b/i.test(textLower)) {
+      if (/\b(?:flatmate|roommate|replacement|pre-occupied|occupancy|available|vacan(?:cy|t))\b/i.test(textLower)) {
         return true;
       }
       return false;
@@ -173,3 +209,4 @@ function escapeRegExp(string: string): string {
 function capitalizeWords(str: string): string {
   return str.replace(/\b\w/g, (l) => l.toUpperCase());
 }
+

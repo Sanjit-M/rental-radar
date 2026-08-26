@@ -152,13 +152,35 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
         await page.goto(group.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
         await page.waitForTimeout(3000 + Math.random() * 2000);
 
-        // Scroll gently 3 times
+        // Detect if redirected to login page or checkpoint
+        const currentUrl = page.url();
+        const pageTitle = await page.title();
+        if (currentUrl.includes('login') || currentUrl.includes('checkpoint') || pageTitle.toLowerCase().includes('log in')) {
+          console.warn(`⚠️ Facebook session invalid or login required when accessing ${group.name}.`);
+          continue;
+        }
+
+        // Scroll gently 3 times to load dynamic feed content
         for (let i = 0; i < 3; i++) {
           await page.mouse.wheel(0, 1200);
           await page.waitForTimeout(2000 + Math.random() * 1000);
         }
 
-        const elements = await page.$$('[role="feed"] > div, [role="article"], div[data-ad-preview="message"]');
+        // Expand any truncated "See more" text buttons before extracting
+        try {
+          const seeMoreButtons = await page.$$('div[role="button"]:has-text("See more"), div[role="button"]:has-text("See More"), span:has-text("See more")');
+          for (const btn of seeMoreButtons.slice(0, 15)) {
+            try {
+              await btn.click({ timeout: 500 });
+            } catch {
+              // Ignore unclickable buttons
+            }
+          }
+        } catch {
+          // Ignore failure to expand buttons
+        }
+
+        const elements = await page.$$('[role="feed"] > div, [role="article"], div[data-ad-preview="message"], div[data-pagelet*="FeedUnit"]');
         for (const el of elements) {
           scannedCount++;
           try {
@@ -206,11 +228,13 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
     }
 
     await context.close();
-    await listingRepository.logScrapeRun('success', scannedCount, matchedCount);
-    return { status: 'success', scanned: scannedCount, matched: matchedCount };
+    const finalStatus = scannedCount > 0 ? 'success' : 'no_posts_found';
+    await listingRepository.logScrapeRun(finalStatus, scannedCount, matchedCount);
+    return { status: finalStatus, scanned: scannedCount, matched: matchedCount };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     await listingRepository.logScrapeRun('error', scannedCount, matchedCount, message);
     return { status: 'error', error: message, scanned: scannedCount, matched: matchedCount };
   }
 }
+
