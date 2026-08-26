@@ -1,6 +1,4 @@
-import { createClient, Client } from '@libsql/client';
-import path from 'path';
-import fs from 'fs';
+import { createClient, Client } from '@libsql/client/web';
 
 /** Schema SQL shared identically across both local SQLite and Turso Cloud SQLite. */
 export const SCHEMA_SQL = `
@@ -62,7 +60,7 @@ export interface IDatabase {
   isTurso(): boolean;
 }
 
-class LibSqlDatabase implements IDatabase {
+class WebLibSqlDatabase implements IDatabase {
   private client: Client;
   private isCloud: boolean;
   private initPromise: Promise<void> | null = null;
@@ -79,7 +77,7 @@ class LibSqlDatabase implements IDatabase {
   private async ensureInitialized(): Promise<void> {
     if (!this.initPromise) {
       this.initPromise = this.initSchema().catch((err) => {
-        console.error('Database schema auto-init warning:', err.message);
+        console.error('Database schema auto-init warning:', err?.message || err);
         this.initPromise = null;
       });
     }
@@ -96,7 +94,7 @@ class LibSqlDatabase implements IDatabase {
         await this.client.execute(stmt);
       } catch (err: any) {
         if (!err.message?.includes('already exists')) {
-          console.warn(`DDL notice:`, err.message);
+          console.warn('DDL notice:', err.message);
         }
       }
     }
@@ -130,17 +128,13 @@ function createDatabase(): IDatabase {
   const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
   if (tursoUrl) {
-    console.log(`📡 Connecting to Turso Cloud at ${tursoUrl.replace(/:\/\/.*@/, '://***@')}`);
-    return new LibSqlDatabase(tursoUrl, tursoToken);
+    console.log(`📡 Connecting to Turso Cloud (Web Fetch) at ${tursoUrl.replace(/:\/\/.*@/, '://***@')}`);
+    return new WebLibSqlDatabase(tursoUrl, tursoToken);
   }
 
-  // Local file mode
-  const dataDir = path.resolve(process.cwd(), 'data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  const localDbUrl = `file:${path.join(dataDir, 'listings.db')}`;
-  return new LibSqlDatabase(localDbUrl);
+  // Fallback in local node development
+  const localDbUrl = 'file:data/listings.db';
+  return new WebLibSqlDatabase(localDbUrl);
 }
 
 export const db: IDatabase = createDatabase();
