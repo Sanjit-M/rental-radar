@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Production build output
+dist/
+
+# SQLite Database storage
+data/*.db
+data/*.db-wal
+data/*.db-shm
+
+# Environment & local session profiles
+.env
+.env.local
+.fb_rental_profile/
+*.log
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
