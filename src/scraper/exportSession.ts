@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { createPersistentContext, USER_DATA_DIR, hasExistingSession } from './browserSession';
 
 async function exportSession() {
@@ -8,25 +7,26 @@ async function exportSession() {
 
   if (!hasExistingSession()) {
     console.error('❌ No active session found in ' + USER_DATA_DIR);
-    console.error('👉 Please run `pnpm auth:setup` first to log into Facebook in browser.');
+    console.error('👉 Please run `pnpm auth` first to log into Facebook in browser.');
     process.exit(1);
   }
 
   console.log('🔍 Reading active browser session from ' + USER_DATA_DIR + '...');
   const context = await createPersistentContext(true);
-  
+
   // Extract storage state (cookies, origins, local storage)
   const storageState = await context.storageState();
   await context.close();
 
   // Validate Facebook authentication cookies
-  const fbCookies = storageState.cookies.filter((c) => c.domain.includes('facebook.com'));
+  const cookies: Array<{ name: string; domain: string }> = storageState.cookies || [];
+  const fbCookies = cookies.filter((c) => c.domain.includes('facebook.com'));
   const hasCUser = fbCookies.some((c) => c.name === 'c_user');
   const hasXs = fbCookies.some((c) => c.name === 'xs');
 
   if (!hasCUser || !hasXs) {
     console.warn('⚠️ Warning: Critical Facebook session cookies (c_user / xs) were not found.');
-    console.warn('Your session might be logged out. Please re-run `pnpm auth:setup`.');
+    console.warn('Your session might be logged out. Please re-run `pnpm auth`.');
   } else {
     console.log('✅ Found active Facebook session cookies: c_user, xs, datr');
   }

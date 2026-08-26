@@ -1,7 +1,6 @@
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { chromium, BrowserContext } from 'playwright';
 
 export const USER_DATA_DIR = path.join(os.homedir(), '.fb_rental_profile');
 const STORAGE_STATE_PATH = path.join(USER_DATA_DIR, 'storageState.json');
@@ -22,8 +21,10 @@ export function hasExistingSession(): boolean {
 
 /**
  * Launches persistent context or initializes browser context from storageState.json / FB_SESSION_STORAGE.
+ * NOTE: Playwright is dynamically loaded so serverless runtime on Vercel never crashes on import.
  */
-export async function createPersistentContext(headless: boolean = true): Promise<BrowserContext> {
+export async function createPersistentContext(headless: boolean = true): Promise<any> {
+  const { chromium } = await import('playwright');
   const envStorage = process.env.FB_SESSION_STORAGE;
 
   // 1. If running in GitHub Actions / Cloud with FB_SESSION_STORAGE Secret

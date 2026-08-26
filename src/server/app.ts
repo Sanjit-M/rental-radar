@@ -5,8 +5,6 @@ import { listingsRouter } from './routes/listings';
 import { statsRouter } from './routes/stats';
 import { scrapeRouter } from './routes/scrape';
 import { PTP_COORDINATES, SCORING_CONFIG, TARGET_LOCATIONS } from '../domain/config';
-import { listingRepository } from '../db/repository';
-import { seedInitialData } from '../scraper/groupScraper';
 
 export const app = new Hono();
 
@@ -64,15 +62,3 @@ app.route('/api/stats', statsRouter);
 
 app.route('/scrape', scrapeRouter);
 app.route('/api/scrape', scrapeRouter);
-
-// Auto-seed if database is empty on launch
-listingRepository.getListings().then((existing) => {
-  if (existing.length === 0) {
-    console.log('📦 Database is empty. Auto-seeding initial realistic listings...');
-    seedInitialData().then((count) => {
-      console.log(`✅ Auto-seeded ${count} listings.`);
-    });
-  }
-}).catch((err) => {
-  console.error('Error during database check:', err);
-});
