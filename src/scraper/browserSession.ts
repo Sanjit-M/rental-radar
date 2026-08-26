@@ -20,6 +20,87 @@ export function hasExistingSession(): boolean {
 }
 
 /**
+ * Parses raw session input from environment variables across multiple formats:
+ * 1. Standard Playwright storageState JSON string
+ * 2. Base64-encoded storageState JSON
+ * 3. Raw Cookie string (e.g. "c_user=123; xs=abc; sb=xyz; datr=...")
+ */
+export function parseStorageState(rawInput: string): any {
+  if (!rawInput || typeof rawInput !== 'string') return undefined;
+
+  let input = rawInput.trim();
+
+  // Strip wrapping quotes e.g. '"..."' or "'''"
+  if (
+    (input.startsWith('"') && input.endsWith('"')) ||
+    (input.startsWith("'") && input.endsWith("'"))
+  ) {
+    input = input.slice(1, -1).trim();
+  }
+
+  // 1. Direct JSON parse
+  if (input.startsWith('{') || input.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(input);
+      if (Array.isArray(parsed)) {
+        return { cookies: parsed, origins: [] };
+      }
+      return parsed;
+    } catch {
+      // Continue to next strategy
+    }
+  }
+
+  // 2. Base64 decoded JSON
+  try {
+    const decoded = Buffer.from(input, 'base64').toString('utf-8').trim();
+    if (decoded.startsWith('{') || decoded.startsWith('[')) {
+      const parsed = JSON.parse(decoded);
+      if (Array.isArray(parsed)) {
+        return { cookies: parsed, origins: [] };
+      }
+      return parsed;
+    }
+  } catch {
+    // Continue to next strategy
+  }
+
+  // 3. Raw Cookie String format (e.g. "sb=...; datr=...; c_user=...; xs=...")
+  if (input.includes('=') && (input.includes(';') || input.includes('c_user') || input.includes('xs') || input.includes('sb') || input.includes('datr'))) {
+    try {
+      const cookies = input
+        .split(';')
+        .map((part) => part.trim())
+        .filter((part) => part.includes('='))
+        .map((part) => {
+          const eqIdx = part.indexOf('=');
+          const name = part.slice(0, eqIdx).trim();
+          const value = part.slice(eqIdx + 1).trim();
+          return {
+            name,
+            value,
+            domain: '.facebook.com',
+            path: '/',
+            expires: -1,
+            httpOnly: false,
+            secure: true,
+            sameSite: 'Lax' as const,
+          };
+        });
+
+      if (cookies.length > 0) {
+        console.log(`🍪 Successfully converted raw cookie string into ${cookies.length} browser cookies.`);
+        return { cookies, origins: [] };
+      }
+    } catch (err) {
+      console.warn('Failed converting cookie string:', err);
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Launches persistent context or initializes browser context from storageState.json / FB_SESSION_STORAGE.
  * NOTE: Playwright is dynamically loaded so serverless runtime on Vercel never crashes on import.
  */
@@ -29,14 +110,11 @@ export async function createPersistentContext(headless: boolean = true): Promise
 
   // 1. If running in GitHub Actions / Cloud with FB_SESSION_STORAGE Secret
   if (envStorage) {
-    let storageStateObj: any;
-    try {
-      const decoded = envStorage.startsWith('{')
-        ? envStorage
-        : Buffer.from(envStorage, 'base64').toString('utf-8');
-      storageStateObj = JSON.parse(decoded);
-    } catch (err) {
-      console.error('Failed to parse FB_SESSION_STORAGE secret:', err);
+    const storageStateObj = parseStorageState(envStorage);
+    if (storageStateObj) {
+      console.log('🔑 Successfully loaded Facebook session from FB_SESSION_STORAGE secret.');
+    } else {
+      console.warn('⚠️ FB_SESSION_STORAGE secret provided but could not be parsed into cookies/storage state. Launching clean context.');
     }
 
     const browser = await chromium.launch({
