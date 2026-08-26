@@ -1,8 +1,9 @@
 import readline from 'readline';
-import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { execSync } from 'child_process';
+import { chromium } from 'playwright';
 
 const USER_DATA_DIR = path.join(os.homedir(), '.fb_rental_profile');
 const STORAGE_STATE_PATH = path.join(USER_DATA_DIR, 'storageState.json');
@@ -20,106 +21,67 @@ function prompt(query: string): Promise<string> {
   );
 }
 
-function parseCookieHeader(cookieStr: string) {
-  const cookies: Array<{
-    name: string;
-    value: string;
-    domain: string;
-    path: string;
-    expires: number;
-    httpOnly: boolean;
-    secure: boolean;
-    sameSite: 'Lax' | 'None' | 'Strict';
-  }> = [];
-
-  const pairs = cookieStr.split(';');
-  for (const pair of pairs) {
-    const idx = pair.indexOf('=');
-    if (idx === -1) continue;
-    const name = pair.substring(0, idx).trim();
-    const value = pair.substring(idx + 1).trim();
-    if (!name) continue;
-
-    cookies.push({
-      name,
-      value,
-      domain: '.facebook.com',
-      path: '/',
-      expires: Math.floor(Date.now() / 1000) + 86400 * 90, // 90 days
-      httpOnly: name === 'xs' || name === 'c_user',
-      secure: true,
-      sameSite: 'None',
-    });
-  }
-  return cookies;
-}
-
 async function main() {
   console.log('='.repeat(70));
-  console.log(' 🌐 Facebook Default Browser Authentication (Helium / macOS)');
+  console.log(' 🌐 Facebook Real Account Authentication (Interactive Browser)');
   console.log('='.repeat(70));
+  console.log('\n1. A Chromium browser window will open to facebook.com.');
+  console.log('2. Log in to your Facebook account in the browser window.');
+  console.log('3. Return here and press ENTER once you see your Facebook feed.\n');
 
-  // 1. Open default browser (Helium) to Facebook
-  console.log('\n🚀 Opening Facebook in your default browser (Helium)...');
-  exec('open https://www.facebook.com');
-
-  console.log('\n' + '-'.repeat(70));
-  console.log('📋 FASTEST SETUP (10 Seconds):');
-  console.log('1. In Helium on facebook.com, open Developer Console (Cmd + Option + J)');
-  console.log('2. Copy and paste this 1 line into the console and press Enter:\n');
-  console.log('   \x1b[36mcopy(document.cookie)\x1b[0m\n');
-  console.log('   (This instantly copies your Facebook session cookies to your clipboard)');
-  console.log('-'.repeat(70) + '\n');
-
-  let cookieInput = await prompt('👉 Paste your clipboard here and press ENTER: ');
-
-  // If user pasted individual c_user or format
-  if (!cookieInput.includes('=')) {
-    console.log('\nNo key-value pairs detected. Let us capture c_user and xs individually:');
-    const cUser = await prompt('Enter your c_user (Numeric ID): ');
-    const xs = await prompt('Enter your xs (Session Token): ');
-    cookieInput = `c_user=${cUser}; xs=${xs}`;
-  }
-
-  const cookies = parseCookieHeader(cookieInput);
-
-  if (!cookies.some((c) => c.name === 'c_user') && !cookies.some((c) => c.name === 'xs')) {
-    console.warn('\n⚠️ Warning: Neither "c_user" nor "xs" was found in the input.');
-    console.warn('Please make sure you were logged in on facebook.com when copying.');
-  }
-
-  const storageState = {
-    cookies,
-    origins: [
-      {
-        origin: 'https://www.facebook.com',
-        localStorage: [],
-      },
-    ],
-  };
-
-  // 2. Write to ~/.fb_rental_profile/storageState.json
   if (!fs.existsSync(USER_DATA_DIR)) {
     fs.mkdirSync(USER_DATA_DIR, { recursive: true });
   }
-  fs.writeFileSync(STORAGE_STATE_PATH, JSON.stringify(storageState, null, 2), 'utf-8');
 
-  console.log('\n✅ Successfully saved active session to:');
-  console.log('   ' + STORAGE_STATE_PATH);
+  const browserContext = await chromium.launchPersistentContext(USER_DATA_DIR, {
+    headless: false,
+    viewport: { width: 1280, height: 900 },
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
+  });
 
-  // 3. Output Base64 for GitHub Secrets
-  const base64String = Buffer.from(JSON.stringify(storageState)).toString('base64');
+  const page = await browserContext.newPage();
+  await page.goto('https://www.facebook.com');
 
+  await prompt('👉 Once you are logged in on Facebook in the browser window, press ENTER here: ');
+
+  // Save the full storage state with all HttpOnly cookies (xs, c_user, datr, sb, fr)
+  await browserContext.storageState({ path: STORAGE_STATE_PATH });
+  const rawState = fs.readFileSync(STORAGE_STATE_PATH, 'utf-8');
+  const stateObj = JSON.parse(rawState);
+
+  const cookies = stateObj.cookies || [];
+  const hasCUser = cookies.some((c: any) => c.name === 'c_user');
+  const hasXs = cookies.some((c: any) => c.name === 'xs');
+
+  if (hasCUser && hasXs) {
+    console.log('\n✅ Active Facebook session successfully captured (c_user + xs)!');
+  } else {
+    console.warn('\n⚠️ Warning: c_user or xs was not detected. Ensure you completed login.');
+  }
+
+  await browserContext.close();
+
+  // Export base64 for GitHub Secrets
+  const base64 = Buffer.from(rawState).toString('base64');
   console.log('\n' + '='.repeat(70));
-  console.log('📤 GITHUB ACTIONS SECRET (Optional for Cloud Scraper)');
-  console.log('Copy this value to GitHub -> Settings -> Secrets -> FB_SESSION_STORAGE:');
-  console.log('='.repeat(70) + '\n');
-  console.log(base64String);
-  console.log('\n' + '='.repeat(70));
-  console.log('🎉 Setup complete! You can now run `pnpm scrape` anytime.');
+  console.log('📤 Updating GitHub Actions Secret FB_SESSION_STORAGE via GitHub CLI...');
+  try {
+    execSync(`echo "${base64}" | gh secret set FB_SESSION_STORAGE --repo Sanjit-M/rental-radar`, {
+      stdio: 'inherit',
+    });
+    console.log('✅ GitHub Secret FB_SESSION_STORAGE successfully updated!');
+  } catch (err: any) {
+    console.log('Note: To update GitHub Actions secret manually, copy:');
+    console.log(base64);
+  }
+  console.log('='.repeat(70));
+  console.log('\n🎉 Setup complete! You can now run `pnpm scrape` to scrape live listings.');
 }
 
 main().catch((err) => {
-  console.error('Setup failed:', err);
+  console.error('Authentication setup error:', err);
   process.exit(1);
 });
+
