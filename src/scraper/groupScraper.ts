@@ -8,8 +8,28 @@ import { hasExistingSession, createPersistentContext } from './browserSession';
 import { SEED_POSTS } from './seedData';
 import { RentalListing, FbPostId, UserListingStatus } from '../domain/types';
 
-/** Target Facebook Group URLs to monitor. */
-export const TARGET_FB_GROUPS = [
+/** Target Facebook Group and Search URLs to monitor. */
+export const TARGET_FB_SOURCES = [
+  {
+    name: 'Search: Kadubeesanahalli Flat Rent',
+    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20flat%20rent',
+  },
+  {
+    name: 'Search: Kadubeesanahalli Flatmate',
+    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20flatmate',
+  },
+  {
+    name: 'Search: Prestige Tech Park Flat',
+    url: 'https://www.facebook.com/search/posts/?q=Prestige%20Tech%20Park%20flat',
+  },
+  {
+    name: 'Search: Sobha Iris Kadubeesanahalli',
+    url: 'https://www.facebook.com/search/posts/?q=Sobha%20Iris%20Kadubeesanahalli',
+  },
+  {
+    name: 'Search: Assetz East Point Boganahalli',
+    url: 'https://www.facebook.com/search/posts/?q=Assetz%20East%20Point%20Boganahalli',
+  },
   {
     name: 'Flat and Flatmates Bangalore',
     url: 'https://www.facebook.com/groups/flatandflatmatesbangalore/?sorting_setting=CHRONOLOGICAL',
@@ -27,6 +47,8 @@ export const TARGET_FB_GROUPS = [
     url: 'https://www.facebook.com/groups/kadubeesanahalliflats/?sorting_setting=CHRONOLOGICAL',
   },
 ];
+export const TARGET_FB_GROUPS = TARGET_FB_SOURCES;
+
 
 /**
  * Pipeline processor: Cleans, filters, extracts, calculates peak commute,
@@ -180,7 +202,7 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
           // Ignore failure to expand buttons
         }
 
-        const elements = await page.$$('[role="feed"] > div, [role="article"], div[data-ad-preview="message"], div[data-pagelet*="FeedUnit"]');
+        const elements = await page.$$('[role="feed"] > div, [role="article"], div[data-ad-preview="message"], div[data-pagelet*="FeedUnit"], div[class*="x1yztbdb"]');
         for (const el of elements) {
           scannedCount++;
           try {
@@ -216,7 +238,10 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
             }
 
             const matched = await processPost(text, group.name, authorName, postedTime, postUrl);
-            if (matched) matchedCount++;
+            if (matched) {
+              matchedCount++;
+              console.log(`  ✨ Matched: [${matched.score} pts] ${matched.authorName} - ${matched.entities.societyName || matched.location} (${matched.bhkType})`);
+            }
           } catch {
             // Skip broken individual elements
           }
@@ -226,6 +251,7 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
         console.error(`Error scraping group ${group.name}:`, message);
       }
     }
+
 
     await context.close();
     const finalStatus = scannedCount > 0 ? 'success' : 'no_posts_found';
