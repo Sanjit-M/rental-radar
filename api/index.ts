@@ -1,8 +1,5 @@
-import { handle } from 'hono/vercel';
+import { getRequestListener } from '@hono/node-server';
 import { app } from '../src/server/app';
 
-export const config = {
-  runtime: 'nodejs',
-};
-
-export default handle(app);
+// Bridge standard Node.js serverless request/response to Hono
+export default getRequestListener(app.fetch);
