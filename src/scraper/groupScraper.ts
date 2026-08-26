@@ -2,34 +2,48 @@ import { passesAllFilters } from '../domain/parser/filter';
 import { extractAllEntities } from '../domain/parser/extractor';
 import { calculatePeakScooterCommute } from '../domain/commute/router';
 import { computeListingScore } from '../domain/scorer/ratingEngine';
-import { cleanPostText, generatePostId } from '../domain/parser/cleaner';
+import { cleanPostText, generatePostId, parseFacebookTimestamp } from '../domain/parser/cleaner';
 import { listingRepository } from '../db/repository';
 import { hasExistingSession, createPersistentContext } from './browserSession';
 import { SEED_POSTS } from './seedData';
 import { RentalListing, FbPostId, UserListingStatus } from '../domain/types';
 
-/** Target Facebook Group and Search URLs to monitor. */
+/** Target Facebook Group and Recent Chronological Search Sources to monitor. */
 export const TARGET_FB_SOURCES = [
+  // 1-8: Chronological / Recent Search Feeds for Kadubeesanahalli & PTP Corridors
   {
     name: 'Search: Kadubeesanahalli Flat Rent',
-    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20flat%20rent',
+    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
     name: 'Search: Kadubeesanahalli Flatmate',
-    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20flatmate',
+    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20flatmate&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
     name: 'Search: Prestige Tech Park Flat',
-    url: 'https://www.facebook.com/search/posts/?q=Prestige%20Tech%20Park%20flat',
+    url: 'https://www.facebook.com/search/posts/?q=Prestige%20Tech%20Park%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
-    name: 'Search: Sobha Iris Kadubeesanahalli',
-    url: 'https://www.facebook.com/search/posts/?q=Sobha%20Iris%20Kadubeesanahalli',
+    name: 'Search: PTP Flat',
+    url: 'https://www.facebook.com/search/posts/?q=PTP%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
-    name: 'Search: Assetz East Point Boganahalli',
-    url: 'https://www.facebook.com/search/posts/?q=Assetz%20East%20Point%20Boganahalli',
+    name: 'Search: Kadubeesanahalli Room',
+    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20room&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
+  {
+    name: 'Search: Cessna Business Park Flatmate',
+    url: 'https://www.facebook.com/search/posts/?q=Cessna%20Business%20Park%20flatmate&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Boganahalli Flat Rent',
+    url: 'https://www.facebook.com/search/posts/?q=Boganahalli%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Panathur PTP Flatmate',
+    url: 'https://www.facebook.com/search/posts/?q=Panathur%20PTP%20flatmate&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  // 9-20: Major Active Bangalore Rental Groups
   {
     name: 'Flat and Flatmates Bangalore',
     url: 'https://www.facebook.com/groups/flatandflatmatesbangalore/?sorting_setting=CHRONOLOGICAL',
@@ -46,27 +60,49 @@ export const TARGET_FB_SOURCES = [
     name: 'Flats and Flatmates Kadubeesanahalli',
     url: 'https://www.facebook.com/groups/kadubeesanahalliflats/?sorting_setting=CHRONOLOGICAL',
   },
+  {
+    name: 'Flatmates Bangalore East',
+    url: 'https://www.facebook.com/groups/flatmatesbangaloreeast/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Bangalore Rentals Without Broker',
+    url: 'https://www.facebook.com/groups/bangalorerentalswithoutbroker/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Bangalore Flats and Flatmates',
+    url: 'https://www.facebook.com/groups/bangaloreflatsflatmates/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'ORR Bangalore Rentals',
+    url: 'https://www.facebook.com/groups/orrbangalorerentals/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Marathahalli Bellandur Rentals',
+    url: 'https://www.facebook.com/groups/marathahallibellandurrentals/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Bangalore Bachelor Flats',
+    url: 'https://www.facebook.com/groups/bangalorebachelorflats/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Prestige Tech Park Rentals',
+    url: 'https://www.facebook.com/groups/prestigetechparkrentals/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Bellandur / Kadubeesanahalli',
+    url: 'https://www.facebook.com/groups/flatsandflatmatesbellandurkadubeesanahalli/?sorting_setting=CHRONOLOGICAL',
+  },
 ];
 export const TARGET_FB_GROUPS = TARGET_FB_SOURCES;
-
 
 /**
  * Pipeline processor: Cleans, filters, extracts, calculates peak commute,
  * scores, and persists a single Facebook rental post.
- *
- * @param rawText - Raw post body text.
- * @param groupName - Name of the source group.
- * @param authorName - Author name or fallback.
- * @param postedTime - When the post was published (e.g. "2h ago").
- * @param postUrl - Direct permalink URL.
- * @param fbPostIdOverride - Optional explicit FbPostId.
- * @param initialStatus - Initial pipeline tracking status.
- * @returns Persisted RentalListing entity or null if filtered out.
  */
 export async function processPost(
   rawText: string,
   groupName: string,
-  authorName: string = 'Facebook Member',
+  authorName: string = 'Anonymous Group Participant',
   postedTime: string = 'Recently',
   postUrl: string = '',
   fbPostIdOverride?: FbPostId,
@@ -119,29 +155,7 @@ export async function processPost(
 }
 
 /**
- * Seeds initial realistic Kadubeesanahalli / PTP accommodation fixtures.
- *
- * @returns Count of seeded listings.
- */
-export async function seedInitialData(): Promise<number> {
-  let count = 0;
-  for (const item of SEED_POSTS) {
-    const result = await processPost(
-      item.text,
-      item.groupName,
-      item.authorName,
-      item.postedTime,
-      item.postUrl,
-      item.fbPostId as unknown as FbPostId,
-      item.userStatus
-    );
-    if (result) count++;
-  }
-  return count;
-}
-
-/**
- * Executes a full headless scrape cycle across all target Facebook groups.
+ * Executes a full headless scrape cycle across all 20 target Facebook sources.
  *
  * @param headless - Whether to run Chromium headlessly.
  * @returns Scrape summary statistics.
@@ -157,28 +171,26 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
   let matchedCount = 0;
 
   if (!hasExistingSession()) {
-    console.log('⚠️ No saved Facebook session profile found. Seeding realistic sample listings...');
-    matchedCount = await seedInitialData();
-    const msg = 'No Facebook session found. Loaded realistic seed listings. Run `pnpm auth` to authenticate your account.';
-    await listingRepository.logScrapeRun('seed_loaded', SEED_POSTS.length, matchedCount, msg);
-    return { status: 'seed_loaded', scanned: SEED_POSTS.length, matched: matchedCount, message: msg };
+    const msg = 'No Facebook session found. Run `pnpm auth` to authenticate your account.';
+    await listingRepository.logScrapeRun('no_session', 0, 0, msg);
+    return { status: 'no_session', scanned: 0, matched: 0, message: msg };
   }
 
   try {
     const context = await createPersistentContext(headless);
     const page = await context.newPage();
 
-    for (const group of TARGET_FB_GROUPS) {
+    for (const source of TARGET_FB_SOURCES) {
       try {
-        console.log(`🔍 Scraping group: ${group.name}`);
-        await page.goto(group.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
+        console.log(`🔍 Scraping source: ${source.name}`);
+        await page.goto(source.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
         await page.waitForTimeout(3000 + Math.random() * 2000);
 
         // Detect if redirected to login page or checkpoint
         const currentUrl = page.url();
         const pageTitle = await page.title();
         if (currentUrl.includes('login') || currentUrl.includes('checkpoint') || pageTitle.toLowerCase().includes('log in')) {
-          console.warn(`⚠️ Facebook session invalid or login required when accessing ${group.name}.`);
+          console.warn(`⚠️ Facebook session invalid or login required when accessing ${source.name}.`);
           continue;
         }
 
@@ -209,38 +221,62 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
             const text = await el.innerText();
             if (!text || text.trim().length < 35) continue;
 
-            // Extract Author Name
-            let authorName = 'Facebook Member';
-            const authorEl = await el.$('h2 strong, h3 strong, a[role="link"] > strong, span[dir="auto"] strong');
-            if (authorEl) {
-              const nameText = await authorEl.innerText();
-              if (nameText && nameText.trim().length > 1) {
-                authorName = nameText.trim();
+            const lowerText = text.toLowerCase();
+
+            // 1. Author Name Extraction (Prioritize real name, fallback to Anonymous Group Participant if masked)
+            let authorName = 'Anonymous Group Participant';
+            if (
+              lowerText.includes('anonymous participant') ||
+              lowerText.includes('anonymous post') ||
+              lowerText.includes('anonymous member')
+            ) {
+              authorName = 'Anonymous Group Participant';
+            } else {
+              const authorEl = await el.$(
+                'h2 a, h3 a, h4 a, a[role="link"] > span, strong > span, a[attributionsrc] span, span[dir="auto"] strong'
+              );
+              if (authorEl) {
+                const nameText = (await authorEl.innerText()).trim();
+                if (nameText && nameText.length > 1 && !nameText.toLowerCase().includes('sponsored') && !nameText.toLowerCase().includes('suggested')) {
+                  authorName = nameText;
+                }
               }
             }
 
-            // Extract Post Time
-            let postedTime = 'Recently';
-            const timeEl = await el.$('abbr, a[href*="/posts/"] span, a[href*="/permalink/"] span, span[id*="jsc_c"]');
+            // 2. Exact Post Time & Absolute IST Conversion
+            let postedTimeRaw = 'Recently';
+            const timeEl = await el.$('abbr, a[href*="/posts/"] span, a[href*="/permalink/"] span, a[href*="story_fbid="] span, span[id*="jsc_c"]');
             if (timeEl) {
-              const timeText = await timeEl.innerText();
-              if (timeText && timeText.trim().length > 0) {
-                postedTime = timeText.trim();
+              const timeText = (await timeEl.innerText()).trim();
+              if (timeText && timeText.length > 0) {
+                postedTimeRaw = timeText;
               }
             }
+            const { formattedIST } = parseFacebookTimestamp(postedTimeRaw);
 
-            // Extract Permalink
+            // 3. Exact Post Permalink Extraction (Clean tracking params)
             let postUrl = '';
-            const linkEl = await el.$('a[href*="/posts/"], a[href*="/permalink/"]');
+            const linkEl = await el.$('a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid="]');
             if (linkEl) {
               const href = await linkEl.getAttribute('href');
-              if (href) postUrl = href.split('?')[0];
+              if (href) {
+                try {
+                  const absoluteHref = href.startsWith('http') ? href : `https://www.facebook.com${href}`;
+                  const urlObj = new URL(absoluteHref);
+                  urlObj.searchParams.delete('__cft__[0]');
+                  urlObj.searchParams.delete('__tn__');
+                  urlObj.searchParams.delete('eid');
+                  postUrl = urlObj.toString();
+                } catch {
+                  postUrl = href.split('?')[0];
+                }
+              }
             }
 
-            const matched = await processPost(text, group.name, authorName, postedTime, postUrl);
+            const matched = await processPost(text, source.name, authorName, formattedIST, postUrl);
             if (matched) {
               matchedCount++;
-              console.log(`  ✨ Matched: [${matched.score} pts] ${matched.authorName} - ${matched.entities.societyName || matched.location} (${matched.bhkType})`);
+              console.log(`  ✨ Matched: [${matched.score} pts] ${matched.authorName} - ${matched.entities.societyName || matched.location} (${matched.bhkType}) [${matched.postedTime}]`);
             }
           } catch {
             // Skip broken individual elements
@@ -248,10 +284,9 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
-        console.error(`Error scraping group ${group.name}:`, message);
+        console.error(`Error scraping source ${source.name}:`, message);
       }
     }
-
 
     await context.close();
     const finalStatus = scannedCount > 0 ? 'success' : 'no_posts_found';
@@ -263,4 +298,5 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
     return { status: 'error', error: message, scanned: scannedCount, matched: matchedCount };
   }
 }
+
 

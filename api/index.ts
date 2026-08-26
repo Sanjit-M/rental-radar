@@ -314,7 +314,7 @@ const getListingsHandler = async (c: any) => {
     const parsedPage = rawPage ? parseInt(rawPage, 10) : 1;
     const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 12;
     const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
-    const limit = isNaN(parsedLimit) || parsedLimit < 1 ? 12 : Math.min(50, parsedLimit);
+    const limit = isNaN(parsedLimit) || parsedLimit < 1 ? 12 : Math.min(100, parsedLimit);
     const offset = (page - 1) * limit;
 
     const minScore = c.req.query('minScore') ? parseInt(c.req.query('minScore')!, 10) : undefined;
@@ -371,67 +371,16 @@ const getListingsHandler = async (c: any) => {
         break;
     }
 
-    const countSql = `SELECT COUNT(*) as total FROM listings ${whereClause}`;
-    const dataSql = `SELECT * FROM listings ${whereClause} ${orderClause} LIMIT ? OFFSET ?`;
-    const paginatedArgs = [...args, limit, offset];
-
-    let totalCount = 0;
-    let rawRows: any[] = [];
-
-    if (typeof client.batch === 'function') {
-      const batchRes: any[] = await client.batch(
-        [
-          { sql: countSql, args },
-          { sql: dataSql, args: paginatedArgs },
-        ],
-        'read'
-      );
-      totalCount = Number(batchRes[0]?.rows[0]?.total || 0);
-      rawRows = batchRes[1]?.rows || [];
-    } else {
-      const countRes = await client.execute({ sql: countSql, args });
-      totalCount = Number(countRes.rows[0]?.total || 0);
-      const dataRes = await client.execute({ sql: dataSql, args: paginatedArgs });
-      rawRows = dataRes.rows;
-    }
-
-    // Auto-seed if database is completely empty on an unfiltered root query
-    if (
-      totalCount === 0 &&
-      !search &&
-      minScore === undefined &&
-      maxRent === undefined &&
-      (!recency || recency === 'all') &&
-      (!bhkType || bhkType === 'all') &&
-      (!furnishing || furnishing === 'all') &&
-      (!userStatus || userStatus === 'all')
-    ) {
-      const seedCount = await seedData(client);
-      if (seedCount > 0) {
-        if (typeof client.batch === 'function') {
-          const batchRes: any[] = await client.batch(
-            [
-              { sql: countSql, args },
-              { sql: dataSql, args: paginatedArgs },
-            ],
-            'read'
-          );
-          totalCount = Number(batchRes[0]?.rows[0]?.total || 0);
-          rawRows = batchRes[1]?.rows || [];
-        } else {
-          const countRes = await client.execute({ sql: countSql, args });
-          totalCount = Number(countRes.rows[0]?.total || 0);
-          const dataRes = await client.execute({ sql: dataSql, args: paginatedArgs });
-          rawRows = dataRes.rows;
-        }
-      }
-    }
+    const dataSql = `SELECT * FROM listings ${whereClause} ${orderClause}`;
+    const dataRes = await client.execute({ sql: dataSql, args });
+    const rawRows = dataRes.rows || [];
 
     const rawListings = rawRows.map(mapRow);
-    const listings = deduplicateListings(rawListings);
-
+    const allCanonicalListings = deduplicateListings(rawListings);
+    const totalCount = allCanonicalListings.length;
     const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / limit);
     const hasMore = page < totalPages;
+    const listings = allCanonicalListings.slice(offset, offset + limit);
 
     return c.json({
       count: listings.length,

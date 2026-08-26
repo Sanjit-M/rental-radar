@@ -43,19 +43,20 @@ export const App: React.FC = () => {
   const [userStatus, setUserStatus] = useState('all');
   const [recency, setRecency] = useState('all');
   const [sortBy, setSortBy] = useState<SortBy>('score_desc');
+  const [limit, setLimit] = useState<number>(12);
   const [viewMode, setViewMode] = useState<'grid' | 'table' | 'map'>('grid');
 
   // Modal State
   const [selectedScoreListing, setSelectedScoreListing] = useState<RentalListing | null>(null);
 
   const fetchListings = useCallback(
-    async (targetPage = 1, append = false) => {
+    async (targetPage = 1, append = false, requestedLimit = limit) => {
       setLoading(true);
       setError(null);
 
       const result = await api.getListings({
         page: targetPage,
-        limit: 12,
+        limit: requestedLimit,
         minScore,
         maxRent,
         sortBy,
@@ -85,7 +86,7 @@ export const App: React.FC = () => {
       setHasMore(Boolean(data.hasMore));
       setLoading(false);
     },
-    [minScore, maxRent, bhkType, furnishing, userStatus, recency, search, sortBy]
+    [limit, minScore, maxRent, bhkType, furnishing, userStatus, recency, search, sortBy]
   );
 
   const fetchStats = useCallback(async () => {
@@ -97,9 +98,9 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    fetchListings(1, false);
+    fetchListings(1, false, limit);
     fetchStats();
-  }, [fetchListings, fetchStats]);
+  }, [fetchListings, fetchStats, limit]);
 
   const handleStatusChange = async (id: number, status: UserListingStatus) => {
     // Optimistic update
@@ -110,7 +111,7 @@ export const App: React.FC = () => {
     if (result._tag === 'err') {
       console.error('Status update failed:', result.error.message);
       // Revert optimistic update on failure
-      fetchListings(page, false);
+      fetchListings(page, false, limit);
       return;
     }
     fetchStats();
@@ -124,7 +125,7 @@ export const App: React.FC = () => {
       setScrapeNotice(`Scrape failed: ${result.error.message}`);
     } else {
       setScrapeNotice(result.value.message || 'Scrape cycle complete!');
-      fetchListings(1, false);
+      fetchListings(1, false, limit);
       fetchStats();
     }
     setScraping(false);
@@ -139,14 +140,22 @@ export const App: React.FC = () => {
     setUserStatus('all');
     setRecency('all');
     setSortBy('score_desc');
+    setLimit(12);
+  };
+
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    setPage(1);
+    fetchListings(1, false, newLimit);
   };
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages && newPage !== page && !loading) {
-      fetchListings(newPage, false);
+      fetchListings(newPage, false, limit);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-emerald-500 selection:text-slate-950">
@@ -282,6 +291,8 @@ export const App: React.FC = () => {
           onRecencyChange={setRecency}
           sortBy={sortBy}
           onSortByChange={setSortBy}
+          limit={limit}
+          onLimitChange={handleLimitChange}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
           onResetFilters={handleResetFilters}
@@ -351,7 +362,7 @@ export const App: React.FC = () => {
             <div className="text-slate-400 font-medium text-center sm:text-left">
               Showing{' '}
               <span className="text-white font-bold font-mono">
-                {(page - 1) * 12 + 1}–{Math.min(page * 12, totalCount)}
+                {totalCount === 0 ? 0 : (page - 1) * limit + 1}–{Math.min(page * limit, totalCount)}
               </span>{' '}
               of <span className="text-white font-bold font-mono">{totalCount}</span> listings
               <span className="mx-2 text-slate-600">•</span>

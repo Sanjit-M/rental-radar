@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isValidLocation, isValidGender, isValidBHK, passesAllFilters } from '../src/domain/parser/filter';
+import { parseFacebookTimestamp, formatToIST } from '../src/domain/parser/cleaner';
 
 describe('Location & Post Filter Rules (Correct-by-Construction)', () => {
   it('strictly excludes Bellandur, Marathahalli, Green Glen, Kariyammana Agrahara', () => {
@@ -84,4 +85,26 @@ describe('Location & Post Filter Rules (Correct-by-Construction)', () => {
     expect(res3._tag).toBe('err');
   });
 });
+
+describe('Timestamp & IST Conversion (Cleaner)', () => {
+  it('formats Date into exact IST string', () => {
+    // 2026-08-27T01:00:00+05:30 -> "27 Aug 2026, 01:00 am IST" or similar
+    const ref = new Date('2026-08-26T19:30:00.000Z'); // 1:00 AM IST on Aug 27
+    const ist = formatToIST(ref);
+    expect(ist).toContain('27 Aug 2026');
+    expect(ist).toContain('01:00');
+    expect(ist).toContain('IST');
+  });
+
+  it('parses relative minute and hour tokens into absolute IST', () => {
+    const ref = new Date('2026-08-27T01:30:00+05:30');
+    const res28m = parseFacebookTimestamp('28 mins ago', ref);
+    expect(res28m.formattedIST).toContain('IST');
+    expect(res28m.date.getTime()).toBe(ref.getTime() - 28 * 60 * 1000);
+
+    const res2h = parseFacebookTimestamp('2 hrs ago', ref);
+    expect(res2h.date.getTime()).toBe(ref.getTime() - 2 * 60 * 60 * 1000);
+  });
+});
+
 

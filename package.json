@@ -16,7 +16,8 @@
     "auth:setup": "tsx src/scraper/authSetup.ts",
     "auth:export": "tsx src/scraper/exportSession.ts",
     "scrape": "tsx src/scraper/cli.ts",
-    "sync:turso": "tsx src/scraper/syncTurso.ts"
+    "sync:turso": "tsx src/scraper/syncTurso.ts",
+    "purge:scrape": "tsx src/scraper/purgeAndScrape.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.8.2",

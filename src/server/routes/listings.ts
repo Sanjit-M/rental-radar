@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { listingRepository, ListingQueryOptions } from '../../db/repository';
-import { seedInitialData } from '../../scraper/groupScraper';
 import { UserListingStatus, SortBy } from '../../domain/types';
 
 const VALID_SORT_VALUES: readonly SortBy[] = ['score_desc', 'rent_asc', 'commute_asc', 'newest'];
@@ -22,7 +21,7 @@ listingsRouter.get('/', async (c) => {
     const parsedPage = rawPage ? parseInt(rawPage, 10) : 1;
     const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 12;
     const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
-    const limit = isNaN(parsedLimit) || parsedLimit < 1 ? 12 : Math.min(50, parsedLimit);
+    const limit = isNaN(parsedLimit) || parsedLimit < 1 ? 12 : Math.min(100, parsedLimit);
 
     const rawMinScore = c.req.query('minScore');
     const rawMaxRent = c.req.query('maxRent');
@@ -49,28 +48,7 @@ listingsRouter.get('/', async (c) => {
       sortBy,
     };
 
-
-    let response = await listingRepository.getPaginatedListings(options);
-
-    // Auto-seed if database is completely empty on first launch
-    if (
-      response.totalCount === 0 &&
-      !options.search &&
-      options.minScore === undefined &&
-      options.maxRent === undefined &&
-      (!options.recency || options.recency === 'all') &&
-      (!options.bhkType || options.bhkType === 'all') &&
-      (!options.furnishing || options.furnishing === 'all') &&
-      (!options.userStatus || options.userStatus === 'all')
-    ) {
-      const stats = await listingRepository.getStats();
-      if (stats.totalListings === 0) {
-        console.log('📦 Database is empty. Auto-seeding initial listings...');
-        await seedInitialData();
-        response = await listingRepository.getPaginatedListings(options);
-      }
-    }
-
+    const response = await listingRepository.getPaginatedListings(options);
     return c.json(response);
   } catch (err: any) {
     console.error('Error fetching listings:', err);

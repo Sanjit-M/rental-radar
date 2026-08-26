@@ -232,8 +232,8 @@ describe('Adversarial Verification Suite — Milestone 2 UI & Geospatial Map', (
 
     it('5.1 App.tsx renders complete pagination controls and summary range', () => {
       expect(appContent).toContain('Showing');
-      expect(appContent).toContain('(page - 1) * 12 + 1');
-      expect(appContent).toContain('Math.min(page * 12, totalCount)');
+      expect(appContent).toContain('(page - 1) * limit + 1');
+      expect(appContent).toContain('Math.min(page * limit, totalCount)');
       expect(appContent).toContain('Page');
       expect(appContent).toContain('totalPages');
     });

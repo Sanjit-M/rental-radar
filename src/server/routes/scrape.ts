@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { seedInitialData } from '../../scraper/groupScraper';
 
 export const scrapeRouter = new Hono();
 
@@ -20,13 +19,15 @@ scrapeRouter.post('/trigger', async (c) => {
 
 scrapeRouter.post('/seed', async (c) => {
   try {
-    const count = await seedInitialData();
+    const { runScrapeCycle } = await import('../../scraper/groupScraper');
+    const result = await runScrapeCycle(true);
     return c.json({
-      status: 'success',
-      count,
-      message: `Successfully loaded ${count} verified Kadubeesanahalli / PTP listings.`,
+      status: result.status,
+      count: result.matched,
+      message: `Scrape complete: ${result.matched} listings matched.`,
     });
   } catch (err: any) {
     return c.json({ status: 'error', message: err?.message || String(err) }, 500);
   }
 });
+

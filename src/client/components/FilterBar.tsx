@@ -19,6 +19,8 @@ interface FilterBarProps {
   onRecencyChange: (value: string) => void;
   sortBy: SortBy;
   onSortByChange: (value: SortBy) => void;
+  limit: number;
+  onLimitChange: (limit: number) => void;
   viewMode: 'grid' | 'table' | 'map';
   onViewModeChange: (mode: 'grid' | 'table' | 'map') => void;
   onResetFilters: () => void;
@@ -41,6 +43,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onRecencyChange,
   sortBy,
   onSortByChange,
+  limit,
+  onLimitChange,
   viewMode,
   onViewModeChange,
   onResetFilters,
@@ -62,9 +66,23 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
 
         {/* View Mode & Sort Controls */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <span>Sort by:</span>
+            <span>Per page:</span>
+            <select
+              value={limit}
+              onChange={(e) => onLimitChange(Number(e.target.value))}
+              className="bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer font-medium"
+            >
+              <option value={12}>12 listings</option>
+              <option value={24}>24 listings</option>
+              <option value={48}>48 listings</option>
+              <option value={100}>All (100)</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            <span>Sort:</span>
             <select
               value={sortBy}
               onChange={(e) => onSortByChange(e.target.value as SortBy)}
@@ -115,6 +133,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           </div>
         </div>
       </div>
+
 
       {/* Filter Rows */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 pt-3 border-t border-slate-800/80 text-xs">

@@ -317,28 +317,25 @@ export const listingRepository = {
 
   async getPaginatedListings(options: ListingQueryOptions = {}): Promise<PaginatedListingsResponse> {
     const page = Math.max(1, typeof options.page === 'number' && !isNaN(options.page) ? options.page : 1);
-    const limit = Math.min(50, Math.max(1, typeof options.limit === 'number' && !isNaN(options.limit) ? options.limit : 12));
+    const limit = Math.min(100, Math.max(1, typeof options.limit === 'number' && !isNaN(options.limit) ? options.limit : 12));
     const offset = (page - 1) * limit;
 
     const { whereSql, params } = buildWhereClause(options);
     const orderSql = buildOrderClause(options.sortBy);
 
-    // 1. Query total matching count
-    const countSql = `SELECT COUNT(*) as total FROM listings${whereSql}`;
-    const countRow = await db.queryOne<{ total: number }>(countSql, params);
-    const totalCount = Number(countRow?.total || 0);
+    // 1. Query all matching rows
+    const dataSql = `SELECT * FROM listings${whereSql}${orderSql}`;
+    const rows = await db.query<RawDatabaseRow>(dataSql, params);
+    const allRawListings = rows.map(mapRowToListing);
 
-    // 2. Query paginated slice
-    const dataSql = `SELECT * FROM listings${whereSql}${orderSql} LIMIT ? OFFSET ?`;
-    const dataParams = [...params, limit, offset];
-    const rows = await db.query<RawDatabaseRow>(dataSql, dataParams);
-    const rawListings = rows.map(mapRowToListing);
-
-    // 3. Deduplicate listings within this slice
-    const listings = deduplicateListings(rawListings);
-
+    // 2. Deduplicate canonical listings across full dataset
+    const allCanonicalListings = deduplicateListings(allRawListings);
+    const totalCount = allCanonicalListings.length;
     const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / limit);
     const hasMore = page < totalPages;
+
+    // 3. Slice for the requested page
+    const listings = allCanonicalListings.slice(offset, offset + limit);
 
     return {
       count: listings.length,
