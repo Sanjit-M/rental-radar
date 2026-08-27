@@ -180,3 +180,13 @@ export interface DashboardStats {
   readonly directOwnerCount: number;
   readonly lastScrapeTime: string | null;
 }
+
+/** Normalized Raw Scraped Post record from any source (Facebook, Telegram, etc.) */
+export interface ScrapedPost {
+  readonly postId: string;
+  readonly postUrl: string;
+  readonly authorName: string;
+  readonly postedTime: string;
+  readonly rawText: string;
+  readonly groupName: string;
+}

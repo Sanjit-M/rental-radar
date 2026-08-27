@@ -365,15 +365,68 @@ const statsHandler = async (c: any) => {
 app.get('/stats', statsHandler);
 app.get('/api/stats', statsHandler);
 
-// Scrape Trigger Endpoints (Unrestricted for UI triggers)
+// Scrape Trigger Endpoints (Dispatches GitHub Actions scraper workflow)
 const triggerRouteHandler = async (c: any) => {
   try {
-    return c.json({
-      status: 'success',
-      message: 'Scrape trigger initiated. Live data syncs via hourly GitHub Actions workflow.',
+    const token = process.env.GITHUB_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
+    const repo = process.env.GITHUB_REPO || 'Sanjit-M/rental-radar';
+    const ref = process.env.GITHUB_REF || 'main';
+    const workflow = process.env.GITHUB_WORKFLOW || 'scraper.yml';
+
+    if (!token) {
+      return c.json(
+        {
+          status: 'error',
+          message:
+            'GITHUB_DISPATCH_TOKEN is not configured in Vercel environment variables. Please add a GitHub Personal Access Token with actions:write permission.',
+        },
+        500
+      );
+    }
+
+    const dispatchUrl = `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`;
+    const response = await fetch(dispatchUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github.v3+json',
+        Authorization: `Bearer ${token}`,
+        'User-Agent': 'Rental-Radar-Trigger',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ref }),
     });
+
+    if (response.status === 204) {
+      return c.json({
+        status: 'success',
+        message:
+          'GitHub Actions scrape workflow dispatched successfully. New listings will sync within 2-3 minutes.',
+      });
+    }
+
+    let errorDetails = '';
+    try {
+      const errorJson: any = await response.json();
+      errorDetails = errorJson.message || JSON.stringify(errorJson);
+    } catch {
+      errorDetails = response.statusText || 'Unknown error';
+    }
+
+    return c.json(
+      {
+        status: 'error',
+        message: `GitHub Actions dispatch failed (HTTP ${response.status}): ${errorDetails}`,
+      },
+      502
+    );
   } catch (err: any) {
-    return c.json({ status: 'error', message: err?.message || String(err) }, 500);
+    return c.json(
+      {
+        status: 'error',
+        message: `Failed to dispatch GitHub Actions workflow: ${err?.message || String(err)}`,
+      },
+      500
+    );
   }
 };
 

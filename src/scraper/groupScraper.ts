@@ -6,6 +6,8 @@ import { cleanPostText, generatePostId, parseFacebookTimestamp, extractAuthorFro
 import { listingRepository } from '../db/repository';
 import { hasExistingSession, createPersistentContext, enableFastNetworkInterception } from './browserSession';
 import { RentalListing, FbPostId, UserListingStatus } from '../domain/types';
+import { scrapePublicTelegramChannels } from './telegramScraper';
+import { fetchFacebookViaApify } from './apifyFacebookScraper';
 
 /** Target Facebook Group and Recent Chronological Search Sources to monitor. */
 export const TARGET_FB_SOURCES = [
@@ -145,8 +147,14 @@ export async function processPost(
   fbPostIdOverride?: FbPostId,
   initialStatus: UserListingStatus = 'new'
 ): Promise<RentalListing | null> {
-  // Strict check: Require exact direct Facebook post permalink per Q2 (Option A)
-  if (!postUrl || (!postUrl.includes('/posts/') && !postUrl.includes('story_fbid=') && !postUrl.includes('/permalink/'))) {
+  // Strict check: Require exact direct post permalink (Facebook or Telegram)
+  if (
+    !postUrl ||
+    (!postUrl.includes('/posts/') &&
+      !postUrl.includes('story_fbid=') &&
+      !postUrl.includes('/permalink/') &&
+      !postUrl.includes('t.me/'))
+  ) {
     return null;
   }
 
@@ -394,8 +402,10 @@ async function scrapeSourceWorker(
 }
 
 /**
- * Executes a full high-speed concurrent scrape cycle across all target Facebook sources
- * using a pool of 4 concurrent worker tabs sharing the authenticated browser session.
+ * Executes a full multi-source rental ingestion cycle:
+ * 1. Public Telegram Channels (Zero-Auth, 100% open).
+ * 2. Facebook Groups via Apify Indian Residential Proxies (if APIFY_API_TOKEN configured).
+ * 3. Local/CI Playwright 4-Worker Concurrent Pool across target Facebook sources.
  *
  * @param headless - Whether to run Chromium headlessly.
  * @returns Scrape summary statistics.
@@ -410,53 +420,113 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
   let scannedCount = 0;
   let matchedCount = 0;
   const startTime = Date.now();
+  const seenUrls = new Set<string>();
 
-  if (!hasExistingSession()) {
-    const msg = 'No Facebook session found. Run `pnpm auth` to authenticate your account.';
-    await listingRepository.logScrapeRun('no_session', 0, 0, msg);
-    return { status: 'no_session', scanned: 0, matched: 0, message: msg };
-  }
+  console.log('🔄 [Rental Radar] Starting Multi-Source Ingestion Cycle...');
 
+  // Phase 1: Public Telegram Channels Ingestion
   try {
-    const context = await createPersistentContext(headless);
-    const seenUrls = new Set<string>();
+    console.log('📱 [Multi-Source] Scraping open Bangalore Telegram rental channels...');
+    const telegramPosts = await scrapePublicTelegramChannels();
+    console.log(`📱 [Telegram] Retrieved ${telegramPosts.length} recent posts from public channels.`);
 
-    const NUM_WORKERS = 4;
-    const sourcesQueue = [...TARGET_FB_SOURCES];
+    for (const post of telegramPosts) {
+      if (seenUrls.has(post.postUrl)) continue;
+      seenUrls.add(post.postUrl);
+      scannedCount++;
 
-    console.log(`🚀 Launching ${NUM_WORKERS} concurrent worker tabs across ${sourcesQueue.length} target Facebook sources...`);
+      const matchedListing = await processPost(
+        post.rawText,
+        post.groupName,
+        post.authorName,
+        post.postedTime,
+        post.postUrl
+      );
 
-    // Worker pool loop
-    const workerPromises = Array.from({ length: NUM_WORKERS }, async (_, workerIndex) => {
-      const page = await context.newPage();
-      await enableFastNetworkInterception(page);
-
-      while (sourcesQueue.length > 0) {
-        const source = sourcesQueue.shift();
-        if (!source) break;
-
-        const res = await scrapeSourceWorker(source, page, seenUrls);
-        scannedCount += res.scanned;
-        matchedCount += res.matched;
+      if (matchedListing) {
+        matchedCount++;
+        console.log(
+          `  ✨ [Telegram Match]: [${matchedListing.score} pts] ${matchedListing.authorName} - ${matchedListing.entities.societyName || matchedListing.location} (${matchedListing.bhkType}) [${matchedListing.postedTime}]`
+        );
       }
-
-      await page.close().catch(() => {});
-    });
-
-    await Promise.all(workerPromises);
-    await context.close().catch(() => {});
-
-    const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`\n🎉 Completed concurrent scrape cycle in ${elapsedSec}s. Total Scanned: ${scannedCount}, Matched: ${matchedCount}`);
-
-    const finalStatus = scannedCount > 0 ? 'success' : 'no_posts_found';
-    await listingRepository.logScrapeRun(finalStatus, scannedCount, matchedCount);
-    return { status: finalStatus, scanned: scannedCount, matched: matchedCount };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    await listingRepository.logScrapeRun('error', scannedCount, matchedCount, message);
-    return { status: 'error', error: message, scanned: scannedCount, matched: matchedCount };
+    }
+  } catch (err: any) {
+    console.warn('⚠️ [Telegram] Error during Telegram channel ingestion:', err?.message || String(err));
   }
+
+  // Phase 2: Apify Facebook Ingestion via Indian Residential Proxies (if configured)
+  const apifyToken = process.env.APIFY_API_TOKEN;
+  if (apifyToken && apifyToken.trim() !== '') {
+    try {
+      console.log('🌐 [Multi-Source] Ingesting Facebook groups via Apify Indian Residential Proxies...');
+      const apifyPosts = await fetchFacebookViaApify(apifyToken);
+
+      for (const post of apifyPosts) {
+        if (seenUrls.has(post.postUrl)) continue;
+        seenUrls.add(post.postUrl);
+        scannedCount++;
+
+        const matchedListing = await processPost(
+          post.rawText,
+          post.groupName,
+          post.authorName,
+          post.postedTime,
+          post.postUrl
+        );
+
+        if (matchedListing) {
+          matchedCount++;
+          console.log(
+            `  ✨ [Apify FB Match]: [${matchedListing.score} pts] ${matchedListing.authorName} - ${matchedListing.entities.societyName || matchedListing.location} (${matchedListing.bhkType}) [${matchedListing.postedTime}]`
+          );
+        }
+      }
+    } catch (err: any) {
+      console.warn('⚠️ [Apify] Error during Apify Facebook ingestion:', err?.message || String(err));
+    }
+  }
+
+  // Phase 3: Playwright 4-Worker Concurrent Browser Pool
+  if (hasExistingSession()) {
+    try {
+      const context = await createPersistentContext(headless);
+      const NUM_WORKERS = 4;
+      const sourcesQueue = [...TARGET_FB_SOURCES];
+
+      console.log(`🚀 [Playwright] Launching ${NUM_WORKERS} concurrent worker tabs across ${sourcesQueue.length} target Facebook sources...`);
+
+      const workerPromises = Array.from({ length: NUM_WORKERS }, async () => {
+        const page = await context.newPage();
+        await enableFastNetworkInterception(page);
+
+        while (sourcesQueue.length > 0) {
+          const source = sourcesQueue.shift();
+          if (!source) break;
+
+          const res = await scrapeSourceWorker(source, page, seenUrls);
+          scannedCount += res.scanned;
+          matchedCount += res.matched;
+        }
+
+        await page.close().catch(() => {});
+      });
+
+      await Promise.all(workerPromises);
+      await context.close().catch(() => {});
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('⚠️ [Playwright] Error during browser scrape:', message);
+    }
+  } else {
+    console.log('ℹ️ [Playwright] No local Facebook session cookies found; skipping direct Playwright browser crawl.');
+  }
+
+  const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`\n🎉 Completed multi-source scrape cycle in ${elapsedSec}s. Total Scanned: ${scannedCount}, Matched: ${matchedCount}`);
+
+  const finalStatus = scannedCount > 0 ? 'success' : 'no_posts_found';
+  await listingRepository.logScrapeRun(finalStatus, scannedCount, matchedCount);
+  return { status: finalStatus, scanned: scannedCount, matched: matchedCount };
 }
 
 
