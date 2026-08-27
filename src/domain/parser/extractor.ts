@@ -113,14 +113,14 @@ export function extractBrokerage(text: string): boolean {
  */
 export function extractLandmark(text: string): string | null {
   const landmarkPatterns = [
-    /(?:near|opposite\s*(?:to)?|opp\s*(?:to)?|behind|close\s*to|next\s*to|beside)\s+([A-Za-z0-9\s,&'-]{3,35})(?:\.|\n|,|$|\|)/i,
-    /(?:landmark)\s*[:=-]?\s*([A-Za-z0-9\s,&'-]{3,35})(?:\.|\n|,|$|\|)/i,
+    /(?:near|opposite\s*(?:to)?|opp\s*(?:to)?|behind|close\s*to|next\s*to|beside)\s+([A-Za-z0-9\s&'-]{3,35})(?=[.,\n|$]|$)/i,
+    /(?:landmark)\s*[:=-]?\s*([A-Za-z0-9\s&'-]{3,35})(?=[.,\n|$]|$)/i,
   ];
 
   for (const pat of landmarkPatterns) {
     const match = text.match(pat);
     if (match && match[1]) {
-      const candidate = match[1].trim();
+      const candidate = match[1].replace(/[,|].*$/, '').trim();
       if (candidate.length > 3 && !/^(rent|deposit|bhk|flat|room|male|female|broker|available)/i.test(candidate)) {
         return candidate;
       }

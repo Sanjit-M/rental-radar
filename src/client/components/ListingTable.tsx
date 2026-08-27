@@ -58,7 +58,24 @@ export const ListingTable: React.FC<ListingTableProps> = ({
                   </td>
 
                   <td className="py-3 px-4 font-medium text-white">
-                    <div>{e.societyName || l.location}</div>
+                    <div className="flex items-center gap-2">
+                      {((l.imageUrls && l.imageUrls.length > 0) || (e.imageUrls && e.imageUrls.length > 0)) && (
+                        <img
+                          src={(l.imageUrls || e.imageUrls)![0]}
+                          alt=""
+                          className="w-7 h-7 rounded-lg object-cover border border-slate-700 shrink-0"
+                          onError={(ev) => {
+                            (ev.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <div>
+                        <div className="font-bold">{e.societyName || l.location}</div>
+                        {(l.landmark || e.landmark) && (
+                          <div className="text-[10px] text-cyan-300">📍 {l.landmark || e.landmark}</div>
+                        )}
+                      </div>
+                    </div>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-[10px] text-slate-400 font-normal truncate max-w-[140px]">
                         {l.groupName}

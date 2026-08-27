@@ -94,5 +94,29 @@ scrapeRouter.post('/parse-single', async (c) => {
   }
 });
 
+scrapeRouter.post('/seed', async (c) => {
+  localScrapeState = { status: 'in_progress', conclusion: null, updatedAt: new Date().toISOString() };
+  try {
+    const { runScrapeCycle } = await import('../../scraper/groupScraper');
+    const result = await runScrapeCycle(true);
+    localScrapeState = {
+      status: 'completed',
+      conclusion: result.status === 'success' ? 'success' : 'failure',
+      updatedAt: new Date().toISOString(),
+      scanned: result.scanned,
+      matched: result.matched,
+    };
+    return c.json({
+      status: result.status,
+      count: result.matched,
+      message: `Scrape complete: ${result.matched} listings matched.`,
+    });
+  } catch (err: any) {
+    localScrapeState = { status: 'completed', conclusion: 'failure', updatedAt: new Date().toISOString() };
+    return c.json({ status: 'error', message: err?.message || String(err) }, 500);
+  }
+});
+
+
 
 

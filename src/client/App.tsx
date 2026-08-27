@@ -18,6 +18,10 @@ import {
   ChevronRight,
   CheckCircle2,
   Loader2,
+  PlusCircle,
+  X,
+  Send,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -28,6 +32,14 @@ export const App: React.FC = () => {
   const [scrapePhase, setScrapePhase] = useState<'idle' | 'running' | 'completed' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [scrapeNotice, setScrapeNotice] = useState<string | null>(null);
+
+  // Quick Ingest Modal State
+  const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
+  const [ingestText, setIngestText] = useState('');
+  const [ingestUrl, setIngestUrl] = useState('');
+  const [ingestImages, setIngestImages] = useState('');
+  const [ingestLoading, setIngestLoading] = useState(false);
+  const [ingestResult, setIngestResult] = useState<{ success: boolean; message: string; listing?: any } | null>(null);
 
   // Pagination Controls
   const [page, setPage] = useState(1);
@@ -182,6 +194,54 @@ export const App: React.FC = () => {
     }, 3500);
   };
 
+  const handleQuickIngest = async () => {
+    if (!ingestText.trim() || ingestLoading) return;
+    setIngestLoading(true);
+    setIngestResult(null);
+
+    const imageUrlsList = ingestImages
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.startsWith('http'));
+
+    const res = await api.parseSinglePost(
+      ingestText.trim(),
+      ingestUrl.trim() || undefined,
+      imageUrlsList.length > 0 ? imageUrlsList : undefined
+    );
+
+    setIngestLoading(false);
+    if (res._tag === 'err') {
+      setIngestResult({ success: false, message: `Error: ${res.error.message}` });
+      return;
+    }
+
+    const data = res.value;
+    if (data.filtered) {
+      setIngestResult({
+        success: false,
+        message: `Filter Rejection: ${data.reason || 'Post did not match location/criteria'}`,
+      });
+      return;
+    }
+
+    if (data.success && data.listing) {
+      setIngestResult({
+        success: true,
+        message: `✨ Ingested & Ranked! Score: ${data.listing.score} pts (${data.listing.tier})`,
+        listing: data.listing,
+      });
+      // Refresh feed
+      fetchListings(1, false, limit);
+      fetchStats();
+    } else {
+      setIngestResult({
+        success: false,
+        message: data.error || 'Failed to parse post details',
+      });
+    }
+  };
+
   const handleResetFilters = () => {
     setSearch('');
     setMinScore(40);
@@ -207,7 +267,6 @@ export const App: React.FC = () => {
     }
   };
 
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-emerald-500 selection:text-slate-950">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -232,7 +291,18 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
+          <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap">
+            <button
+              onClick={() => {
+                setIsIngestModalOpen(true);
+                setIngestResult(null);
+              }}
+              className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-cyan-500/30 shadow-lg shadow-cyan-500/10 transition-all"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>Test / Ingest Post</span>
+            </button>
+
             <button
               onClick={handleTriggerScrape}
               disabled={scrapePhase === 'running'}
@@ -519,7 +589,129 @@ export const App: React.FC = () => {
             onClose={() => setSelectedScoreListing(null)}
           />
         )}
+
+        {/* Quick Ingest & Test Post Modal */}
+        {isIngestModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+            <div className="glass-panel w-full max-w-xl p-6 rounded-3xl border border-slate-700/80 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-cyan-950/80 border border-cyan-500/40 text-cyan-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Test / Ingest Rental Post</h3>
+                    <p className="text-xs text-slate-400">
+                      Paste raw Facebook / Telegram text to test the location extraction & commute engine
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsIngestModalOpen(false)}
+                  className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Input Form */}
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Raw Post Text <span className="text-rose-400">*</span>
+                  </label>
+                  <textarea
+                    value={ingestText}
+                    onChange={(e) => setIngestText(e.target.value)}
+                    placeholder="e.g. 1 Room available in 3BHK flat in Sobha Iris, Kadubeesanahalli near Cessna. Rent ₹22,000, deposit ₹45,000. Attached washroom, swimming pool, power backup. Contact: 9845012345"
+                    rows={5}
+                    className="w-full bg-slate-900 border border-slate-700/80 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-cyan-500 font-sans leading-relaxed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Original Post URL <span className="text-slate-500">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={ingestUrl}
+                    onChange={(e) => setIngestUrl(e.target.value)}
+                    placeholder="https://www.facebook.com/groups/... or https://t.me/..."
+                    className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Image URLs <span className="text-slate-500">(Optional, comma separated)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={ingestImages}
+                    onChange={(e) => setIngestImages(e.target.value)}
+                    placeholder="https://...image1.jpg, https://...image2.jpg"
+                    className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              {/* Feedback Banner */}
+              {ingestResult && (
+                <div
+                  className={`p-3.5 rounded-xl text-xs flex items-center justify-between border ${
+                    ingestResult.success
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                      : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {ingestResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <X className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span>{ingestResult.message}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsIngestModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                >
+                  Close
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleQuickIngest}
+                  disabled={!ingestText.trim() || ingestLoading}
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {ingestLoading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Parsing & Scoring...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Parse & Ingest</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
+
+export default App;
+

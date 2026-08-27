@@ -30,7 +30,9 @@ export const ListingCard: React.FC<ListingCardProps> = ({
   onOpenScoreModal,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
   const e = listing.entities;
+  const images = listing.imageUrls || e.imageUrls || [];
 
   const getStatusColor = (status: UserListingStatus) => {
     switch (status) {
@@ -51,6 +53,37 @@ export const ListingCard: React.FC<ListingCardProps> = ({
     <div className="glass-panel glass-panel-hover p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group">
       {/* Top Banner & Badges */}
       <div>
+        {/* Photo Gallery Banner if Images Available */}
+        {images.length > 0 && (
+          <div className="relative mb-4 rounded-xl overflow-hidden bg-slate-900 aspect-video border border-slate-800 shadow-inner group/img">
+            <img
+              src={images[activeImageIdx]}
+              alt={e.societyName || listing.location}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105"
+              loading="lazy"
+              onError={(ev) => {
+                (ev.target as HTMLElement).style.display = 'none';
+              }}
+            />
+            {images.length > 1 && (
+              <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-slate-950/80 backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-300 border border-slate-700">
+                <span>{activeImageIdx + 1}/{images.length}</span>
+                <div className="flex gap-1 ml-1">
+                  {images.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveImageIdx(idx)}
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        idx === activeImageIdx ? 'bg-emerald-400' : 'bg-slate-600'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Author & Post Time Header */}
         <div className="flex items-center justify-between text-xs text-slate-400 pb-2.5 mb-3 border-b border-slate-800/60">
           <div className="flex items-center gap-1.5 font-medium text-slate-300 truncate max-w-[170px]">
@@ -77,7 +110,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
 
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-md">
                 {listing.bhkType}
               </span>
@@ -88,6 +121,12 @@ export const ListingCard: React.FC<ListingCardProps> = ({
             <h3 className="text-base font-bold text-white mt-1 leading-snug">
               {e.societyName || `${listing.location} (near PTP)`}
             </h3>
+            {(listing.landmark || e.landmark) && (
+              <div className="text-[11px] text-cyan-300 mt-0.5 flex items-center gap-1">
+                <span>📍</span>
+                <span className="truncate">{listing.landmark || e.landmark}</span>
+              </div>
+            )}
           </div>
 
           <RatingBadge

@@ -7,6 +7,8 @@ import {
   extractFurnishing,
   extractPhone,
   extractAllEntities,
+  extractLandmark,
+  extractImageUrls,
 } from '../src/domain/parser/extractor';
 import { parseFacebookTimestamp, extractAuthorFromText } from '../src/domain/parser/cleaner';
 import { makeINR } from '../src/domain/types';
@@ -106,4 +108,23 @@ describe('Entity Extractor Engine (Branded & Typed)', () => {
     expect(extractAuthorFromText('WhatsApp: Deepak on 9845012345')).toBe('Deepak');
     expect(extractAuthorFromText('Rent is 25k without contact name')).toBeNull();
   });
+
+  it('extracts landmarks from natural post text', () => {
+    expect(extractLandmark('Flat in Kadubeesanahalli near Sakra World Hospital')).toBe('Sakra World Hospital');
+    expect(extractLandmark('3 BHK behind Cessna Business Park, PTP')).toBe('Cessna Business Park');
+  });
+
+  it('extracts image URLs and new societies from post text', () => {
+    const urls = extractImageUrls('Check out flat photos at https://example.com/photos/flat1.jpg and https://example.com/flat2.png');
+    expect(urls).toEqual(['https://example.com/photos/flat1.jpg', 'https://example.com/flat2.png']);
+
+    const resRohan = extractSocietyAndAmenities('1 room in Rohan Jharoka, near PTP');
+    expect(resRohan.societyName).toBe('Rohan Jharoka');
+    expect(resRohan.isGatedSociety).toBe(true);
+
+    const resAdarsh = extractSocietyAndAmenities('Luxury flat at Adarsh Palm Retreat, Bellandur');
+    expect(resAdarsh.societyName).toBe('Adarsh Palm Retreat');
+    expect(resAdarsh.isGatedSociety).toBe(true);
+  });
 });
+

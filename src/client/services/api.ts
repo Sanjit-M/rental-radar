@@ -205,6 +205,26 @@ export const api = {
       return err(new NetworkError(cause));
     }
   },
+
+  /** Instantly parse and ingest a single post text or URL. */
+  async parseSinglePost(
+    text: string,
+    postUrl?: string,
+    imageUrls?: string[]
+  ): Promise<Result<{ success: boolean; listing?: RentalListing; filtered?: boolean; reason?: string; error?: string }, ApiError>> {
+    try {
+      const res = await fetch(`${API_BASE}/scrape/parse-single`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ text, postUrl, imageUrls }),
+      });
+      const checked = await classifyResponse(res, 'parseSinglePost');
+      if (checked._tag === 'err') return checked;
+      return ok(await checked.value.json() as { success: boolean; listing?: RentalListing; filtered?: boolean; reason?: string; error?: string });
+    } catch (cause) {
+      return err(new NetworkError(cause));
+    }
+  },
 };
 
 /** Result returned by the scrape status check endpoint. */
