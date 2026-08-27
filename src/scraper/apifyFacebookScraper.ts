@@ -1,4 +1,8 @@
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 import { ScrapedPost } from '../domain/types';
+import { parseStorageState } from './browserSession';
 
 export const DEFAULT_APIFY_FB_GROUPS = [
   'https://www.facebook.com/groups/1265072124774804/', // Flats & Flatmates Kadubeesanahalli / Bellandur
@@ -7,6 +11,32 @@ export const DEFAULT_APIFY_FB_GROUPS = [
   'https://www.facebook.com/groups/kadubeesanahalliflats/',
   'https://www.facebook.com/groups/prestigetechparkrentals/',
 ];
+
+/**
+ * Retrieves Facebook cookies for Apify from environment or local storage.
+ */
+function getFbCookiesForApify(): any[] | undefined {
+  if (process.env.APIFY_FB_COOKIES) {
+    const parsed = parseStorageState(process.env.APIFY_FB_COOKIES);
+    if (parsed?.cookies?.length) return parsed.cookies;
+  }
+  if (process.env.FB_SESSION_STORAGE) {
+    const parsed = parseStorageState(process.env.FB_SESSION_STORAGE);
+    if (parsed?.cookies?.length) return parsed.cookies;
+  }
+  const localPath = path.join(os.homedir(), '.fb_rental_profile', 'storageState.json');
+  if (fs.existsSync(localPath)) {
+    try {
+      const state = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
+      if (Array.isArray(state.cookies) && state.cookies.length > 0) {
+        return state.cookies;
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  return undefined;
+}
 
 /**
  * Ingests recent Facebook group posts using the Apify Facebook Group Actor.
@@ -28,20 +58,26 @@ export async function fetchFacebookViaApify(
   }
 
   try {
-    console.log(`🤖 [Apify] Dispatching Facebook Groups Scraper actor via Indian Residential Proxies for ${groupUrls.length} groups...`);
+    const actorId = process.env.APIFY_ACTOR_ID || 'apify~facebook-groups-scraper';
+    console.log(`🤖 [Apify] Dispatching ${actorId} via Indian Residential Proxies for ${groupUrls.length} groups...`);
 
-    // Apify run-sync-get-dataset-items endpoint launches actor and waits for JSON results
-    const endpoint = `https://api.apify.com/v2/acts/apify~facebook-groups-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(apiToken.trim())}&timeout=120`;
+    const endpoint = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items?token=${encodeURIComponent(apiToken.trim())}&timeout=120`;
 
-    const payload = {
+    const cookies = getFbCookiesForApify();
+    const payload: any = {
       startUrls: groupUrls.map((url) => ({ url })),
-      resultsLimit: 15,
+      resultsLimit: Number(process.env.APIFY_RESULTS_LIMIT) || 20,
       viewOption: 'CHRONOLOGICAL',
       proxyConfiguration: {
         useApifyProxy: true,
         apifyProxyCountry: 'IN', // Route via Indian Residential Proxy
       },
     };
+
+    if (cookies && cookies.length > 0) {
+      payload.cookies = cookies;
+      console.log(`🍪 [Apify] Injected ${cookies.length} session cookies into Apify actor.`);
+    }
 
     const res = await fetch(endpoint, {
       method: 'POST',

@@ -8,7 +8,6 @@ import { extractAllEntities } from '../src/domain/parser/extractor';
 import { calculatePeakScooterCommute } from '../src/domain/commute/router';
 import { computeListingScore } from '../src/domain/scorer/ratingEngine';
 import { cleanPostText, generatePostId } from '../src/domain/parser/cleaner';
-import { SAMPLE_POSTS } from '../src/domain/sampleData';
 import {
   RentalListing,
   ExtractedEntities,
@@ -120,100 +119,6 @@ async function ensureSchema(client: any) {
   }
 
   schemaReady = true;
-}
-
-async function seedEdgeDatabase(client: any) {
-  for (const p of SAMPLE_POSTS) {
-    const clean = cleanPostText(p.text);
-    const filterResult = passesAllFilters(clean);
-    if (filterResult._tag === 'err') continue;
-
-    const { location, bhkType } = filterResult.value;
-    const entities = extractAllEntities(clean, p.imageUrls);
-    const commute = calculatePeakScooterCommute(
-      entities.societyLat,
-      entities.societyLon,
-      location,
-      entities.isKadubeesanahalliDirect
-    );
-    const { score, breakdown, tier } = computeListingScore(entities, commute);
-    const fbPostId = generatePostId(p.groupName, p.authorName, clean);
-    const title = `${bhkType} in ${entities.societyName || location}`;
-    const summary = clean.slice(0, 250);
-
-    const upsertSql = `
-      INSERT INTO listings (
-        fb_post_id, group_name, post_url, author_name, posted_time, raw_text,
-        location, landmark, title, summary, image_urls,
-        bhk_type, rent, deposit, is_brokerage,
-        is_gated_society, society_name, has_swimming_pool,
-        has_power_backup, has_attached_washroom, has_balcony,
-        furnishing, is_kadubeesanahalli_direct, contact_phone,
-        distance_km, inbound_mins, outbound_mins, two_way_avg_peak_mins,
-        has_panathur_underpass_bottleneck, score, score_breakdown, tier,
-        user_status, created_at, updated_at
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, ?, ?, ?,
-        ?, datetime('now'), datetime('now')
-      )
-      ON CONFLICT(fb_post_id) DO UPDATE SET
-        rent=excluded.rent,
-        deposit=excluded.deposit,
-        score=excluded.score,
-        tier=excluded.tier,
-        updated_at=datetime('now');
-    `;
-
-    try {
-      await client.execute({
-        sql: upsertSql,
-        args: [
-          fbPostId,
-          p.groupName,
-          p.postUrl,
-          p.authorName,
-          'Just now',
-          clean,
-          location,
-          entities.landmark || null,
-          title,
-          summary,
-          JSON.stringify(entities.imageUrls || []),
-          bhkType,
-          entities.rent !== null ? entities.rent : null,
-          entities.deposit !== null ? entities.deposit : null,
-          entities.isBrokerage ? 1 : 0,
-          entities.isGatedSociety ? 1 : 0,
-          entities.societyName,
-          entities.hasSwimmingPool ? 1 : 0,
-          entities.hasPowerBackup ? 1 : 0,
-          entities.hasAttachedWashroom ? 1 : 0,
-          entities.hasBalcony ? 1 : 0,
-          entities.furnishing,
-          entities.isKadubeesanahalliDirect ? 1 : 0,
-          entities.contactPhone,
-          commute.distanceKm,
-          commute.inboundMins,
-          commute.outboundMins,
-          commute.twoWayAvgPeakMins,
-          commute.hasPanathurUnderpassBottleneck ? 1 : 0,
-          score,
-          JSON.stringify(breakdown),
-          tier,
-          'new',
-        ],
-      });
-    } catch {
-      // Ignore conflict
-    }
-  }
 }
 
 function mapRow(row: any): RentalListing {
@@ -417,18 +322,8 @@ const getListingsHandler = async (c: any) => {
     }
 
     const dataSql = `SELECT * FROM listings ${whereClause} ${orderClause}`;
-    let dataRes = await client.execute({ sql: dataSql, args });
-    let rawRows = dataRes.rows || [];
-
-    // If database is completely empty on initial access, auto-seed with verified PTP listings
-    if (rawRows.length === 0 && (!search || search.trim() === '') && whereClause.length < 25) {
-      const countCheck = await client.execute('SELECT count(*) as cnt FROM listings').catch(() => null);
-      if (!countCheck || Number(countCheck.rows?.[0]?.cnt || 0) === 0) {
-        await seedEdgeDatabase(client);
-        dataRes = await client.execute({ sql: dataSql, args });
-        rawRows = dataRes.rows || [];
-      }
-    }
+    const dataRes = await client.execute({ sql: dataSql, args });
+    const rawRows = dataRes.rows || [];
 
     const rawListings = rawRows.map(mapRow);
     const allCanonicalListings = deduplicateListings(rawListings);

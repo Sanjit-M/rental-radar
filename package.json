@@ -15,6 +15,7 @@
     "auth": "tsx src/scraper/authSetup.ts",
     "auth:setup": "tsx src/scraper/authSetup.ts",
     "auth:export": "tsx src/scraper/exportSession.ts",
+    "login:fb": "tsx scripts/loginFacebook.ts",
     "scrape": "tsx src/scraper/cli.ts",
     "sync:turso": "tsx src/scraper/syncTurso.ts",
     "purge:scrape": "tsx src/scraper/purgeAndScrape.ts"
