@@ -94,6 +94,20 @@ export function parseFacebookTimestamp(
   let clean = rawText.trim();
   const now = referenceTime.getTime();
 
+  // Normalize Indic / Kannada numerals (೦-೯, ०-९ -> 0-9)
+  const indicDigits: Record<string, string> = {
+    '೦': '0', '೧': '1', '೨': '2', '೩': '3', '೪': '4',
+    '೫': '5', '೬': '6', '೭': '7', '೮': '8', '೯': '9',
+    '०': '0', '१': '1', '२': '2', '३': '3', '४': '4',
+    '५': '5', '६': '6', '७': '7', '८': '8', '९': '9',
+  };
+  clean = clean.replace(/[೦-೯०-९]/g, (ch) => indicDigits[ch] || ch);
+
+  // Normalize Kannada / regional time units (e.g. "10ನಿ" -> "10m", "2ಗಂ" -> "2h", "1ದಿನ" -> "1d")
+  clean = clean.replace(/(\d+)\s*(?:ನಿ|ನಿಮಿಷ|ನಿಮಿಷಗಳ\s*ಹಿಂದೆ)/gi, '$1m');
+  clean = clean.replace(/(\d+)\s*(?:ಗಂ|ಗಂಟೆ|ಗಂಟೆಗಳ\s*ಹಿಂದೆ)/gi, '$1h');
+  clean = clean.replace(/(\d+)\s*(?:ದಿನ|ದಿನಗಳ\s*ಹಿಂದೆ)/gi, '$1d');
+
   // Strip leading weekday names e.g. "Friday, 16 August at 11:54" -> "16 August at 11:54"
   clean = clean.replace(/^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)[,\s]+/i, '').trim();
 

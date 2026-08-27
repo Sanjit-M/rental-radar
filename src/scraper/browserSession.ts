@@ -119,11 +119,15 @@ export async function createPersistentContext(headless: boolean = true): Promise
 
     const browser = await chromium.launch({
       headless,
-      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-dev-shm-usage'],
+      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-dev-shm-usage', '--lang=en-US'],
     });
 
     return await browser.newContext({
       storageState: storageStateObj,
+      locale: 'en-US',
+      extraHTTPHeaders: {
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
       viewport: { width: 1280, height: 900 },
       userAgent:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -134,11 +138,15 @@ export async function createPersistentContext(headless: boolean = true): Promise
   if (fs.existsSync(STORAGE_STATE_PATH)) {
     const browser = await chromium.launch({
       headless,
-      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-dev-shm-usage'],
+      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-dev-shm-usage', '--lang=en-US'],
     });
 
     return await browser.newContext({
       storageState: STORAGE_STATE_PATH,
+      locale: 'en-US',
+      extraHTTPHeaders: {
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
       viewport: { width: 1280, height: 900 },
       userAgent:
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -152,9 +160,13 @@ export async function createPersistentContext(headless: boolean = true): Promise
 
   return await chromium.launchPersistentContext(USER_DATA_DIR, {
     headless,
+    locale: 'en-US',
+    extraHTTPHeaders: {
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
     viewport: { width: 1280, height: 900 },
     userAgent:
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-dev-shm-usage'],
+    args: ['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-dev-shm-usage', '--lang=en-US'],
   });
 }

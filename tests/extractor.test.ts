@@ -87,6 +87,15 @@ describe('Entity Extractor Engine (Branded & Typed)', () => {
     const res4 = parseFacebookTimestamp('2 hrs ago', ref);
     expect(res4).not.toBeNull();
 
+    const res5 = parseFacebookTimestamp('11m', ref);
+    expect(res5).not.toBeNull();
+
+    const res6 = parseFacebookTimestamp('10ನಿ', ref);
+    expect(res6).not.toBeNull();
+
+    const res7 = parseFacebookTimestamp('೨ಗಂ', ref);
+    expect(res7).not.toBeNull();
+
     const resInvalid = parseFacebookTimestamp('Invalid date string here', ref);
     expect(resInvalid).toBeNull();
   });

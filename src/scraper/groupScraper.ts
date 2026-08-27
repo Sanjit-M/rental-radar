@@ -253,7 +253,9 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
           // Ignore failure to expand buttons
         }
 
-        const elements = await page.$$('[role="feed"] > div, [role="article"], div[data-ad-preview="message"], div[data-pagelet*="FeedUnit"], div[class*="x1yztbdb"]');
+        const elements = await page.$$(
+          'div[data-pagelet*="Feed"] div[role="feed"] > div, [role="feed"] > div, [role="article"], div[data-ad-preview="message"], div[class*="x1yztbdb"]'
+        );
         for (const el of elements) {
           scannedCount++;
           try {
