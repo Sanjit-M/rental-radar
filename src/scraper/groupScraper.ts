@@ -265,6 +265,9 @@ async function scrapeSourceWorker(
       }
     }
 
+    const pageTitle = await page.title().catch(() => '');
+    console.log(`🔍 [Worker] ${source.name} | DOM Elements: ${elements.length} | Title: "${pageTitle}" | URL: ${page.url()}`);
+
     for (const el of elements) {
       scanned++;
       try {
