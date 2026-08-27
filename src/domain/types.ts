@@ -113,6 +113,7 @@ export interface ExtractedEntities {
   readonly isBrokerage: boolean;
   readonly isGatedSociety: boolean;
   readonly societyName: string | null;
+  readonly landmark?: string | null | undefined;
   readonly hasSwimmingPool: boolean;
   readonly hasPowerBackup: boolean;
   readonly hasAttachedWashroom: boolean;
@@ -126,6 +127,7 @@ export interface ExtractedEntities {
   readonly contactPhone: string | null;
   readonly societyLat?: number | undefined;
   readonly societyLon?: number | undefined;
+  readonly imageUrls?: string[] | undefined;
 }
 
 /** Validated filter details. */
@@ -146,6 +148,10 @@ export interface RentalListing {
   readonly postedTime: string;
   readonly rawText: string;
   readonly location: string;
+  readonly landmark?: string | null | undefined;
+  readonly title?: string | undefined;
+  readonly summary?: string | undefined;
+  readonly imageUrls?: string[] | undefined;
   readonly bhkType: BHKType;
   readonly entities: ExtractedEntities;
   readonly commute: CommuteWindow;
@@ -189,4 +195,6 @@ export interface ScrapedPost {
   readonly postedTime: string;
   readonly rawText: string;
   readonly groupName: string;
+  readonly imageUrls?: string[] | undefined;
 }
+

@@ -191,4 +191,29 @@ export const api = {
       return { requiresPasscode: false };
     }
   },
+
+  /** Check current scrape / workflow execution status. */
+  async getScrapeStatus(): Promise<Result<ScrapeStatusResult, ApiError>> {
+    try {
+      const res = await fetch(`${API_BASE}/scrape/status`, {
+        headers: getHeaders(),
+      });
+      const checked = await classifyResponse(res, 'getScrapeStatus');
+      if (checked._tag === 'err') return checked;
+      return ok(await checked.value.json() as ScrapeStatusResult);
+    } catch (cause) {
+      return err(new NetworkError(cause));
+    }
+  },
 };
+
+/** Result returned by the scrape status check endpoint. */
+export interface ScrapeStatusResult {
+  readonly status: 'idle' | 'queued' | 'in_progress' | 'completed';
+  readonly conclusion: 'success' | 'failure' | 'cancelled' | 'timed_out' | null;
+  readonly runId?: number;
+  readonly htmlUrl?: string;
+  readonly createdAt?: string;
+  readonly updatedAt?: string;
+}
+

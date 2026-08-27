@@ -109,10 +109,32 @@ export function extractBrokerage(text: string): boolean {
 }
 
 /**
- * Extracts society and amenity information.
+ * Extracts landmark information (e.g. "near Sakra World Hospital", "behind Cessna").
+ */
+export function extractLandmark(text: string): string | null {
+  const landmarkPatterns = [
+    /(?:near|opposite\s*(?:to)?|opp\s*(?:to)?|behind|close\s*to|next\s*to|beside)\s+([A-Za-z0-9\s,&'-]{3,35})(?:\.|\n|,|$|\|)/i,
+    /(?:landmark)\s*[:=-]?\s*([A-Za-z0-9\s,&'-]{3,35})(?:\.|\n|,|$|\|)/i,
+  ];
+
+  for (const pat of landmarkPatterns) {
+    const match = text.match(pat);
+    if (match && match[1]) {
+      const candidate = match[1].trim();
+      if (candidate.length > 3 && !/^(rent|deposit|bhk|flat|room|male|female|broker|available)/i.test(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Extracts society and amenity information with natural language matching.
  */
 export function extractSocietyAndAmenities(text: string) {
-  const textClean = text.toLowerCase().replace(/[\s-]/g, '');
+  const textLower = text.toLowerCase();
+  const textClean = textLower.replace(/[\s-]/g, '');
 
   let isGatedSociety = false;
   let societyName: string | null = null;
@@ -122,8 +144,9 @@ export function extractSocietyAndAmenities(text: string) {
   let societyLat: number | undefined;
   let societyLon: number | undefined;
 
+  // 1. Match against known societies catalog
   for (const [key, data] of Object.entries(KNOWN_SOCIETIES)) {
-    if (textClean.includes(key)) {
+    if (textClean.includes(key) || textLower.includes(data.name.toLowerCase())) {
       isGatedSociety = true;
       societyName = data.name;
       hasSwimmingPool = data.hasPool;
@@ -135,14 +158,28 @@ export function extractSocietyAndAmenities(text: string) {
     }
   }
 
-  if (!isGatedSociety) {
-    if (/\bgated\s*society\b|\bgated\s*community\b|\bapartment\s*complex\b|\bsociety\b/i.test(text)) {
-      isGatedSociety = true;
-      const match = text.match(/(?:society|apartment|complex)\s*[:=-]?\s*([A-Za-z0-9\s]{3,25})/i);
+  // 2. Natural language society/apartment pattern matching
+  if (!societyName) {
+    const societyPatterns = [
+      /(?:in|at|located\s*in|society\s*name\s*[:=-]?|apartment\s*name\s*[:=-]?)\s+([A-Z][a-zA-Z0-9\s]{2,25}(?:Apartments?|Heights?|Enclave|Residency|Homes?|Towers?|View|Retreat|Paradise|Greens?|Layout|Valley|Palms?))/i,
+      /(?:society|apartment|complex|building)\s*[:=-]?\s*([A-Za-z0-9\s]{3,25})/i,
+    ];
+
+    for (const pat of societyPatterns) {
+      const match = text.match(pat);
       if (match && match[1]) {
-        societyName = match[1].trim();
+        const candidate = match[1].trim();
+        if (candidate.length > 3 && !/^(bhk|flat|room|male|female|bachelor|deposit|rent)/i.test(candidate)) {
+          societyName = candidate;
+          isGatedSociety = true;
+          break;
+        }
       }
     }
+  }
+
+  if (!isGatedSociety && /\bgated\s*society\b|\bgated\s*community\b|\bapartment\s*complex\b|\bsociety\b/i.test(text)) {
+    isGatedSociety = true;
   }
 
   if (!hasSwimmingPool && /\bswimming\s*pool\b|\bpool\b/i.test(text)) {
@@ -153,7 +190,7 @@ export function extractSocietyAndAmenities(text: string) {
     hasPowerBackup = true;
   }
 
-  if (text.toLowerCase().includes('panathur') && !text.toLowerCase().includes('kadubeesanahalli')) {
+  if (textLower.includes('panathur') && !textLower.includes('kadubeesanahalli') && !textLower.includes('ptp')) {
     isKadubeesanahalliDirect = false;
   }
 
@@ -223,11 +260,22 @@ export function extractPhone(text: string): string | null {
   return null;
 }
 
-export function extractAllEntities(text: string): ExtractedEntities {
+export function extractImageUrls(text: string): string[] {
+  const urls: string[] = [];
+  const urlRegex = /(https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp|gif)(?:\?[^\s"'<>]*)?)/gi;
+  let m;
+  while ((m = urlRegex.exec(text)) !== null) {
+    if (m[1]) urls.push(m[1]);
+  }
+  return Array.from(new Set(urls));
+}
+
+export function extractAllEntities(text: string, externalImageUrls?: string[]): ExtractedEntities {
   const rent = extractRent(text);
   const deposit = extractDeposit(text, rent);
   const isBrokerage = extractBrokerage(text);
   const societyInfo = extractSocietyAndAmenities(text);
+  const landmark = extractLandmark(text);
   const hasAttachedWashroom = extractAttachedWashroom(text);
   const hasBalcony = extractBalcony(text);
   const isVegetarianOnly = extractVegetarianOnly(text);
@@ -235,6 +283,8 @@ export function extractAllEntities(text: string): ExtractedEntities {
   const isWalkingDistance = extractWalkingDistance(text);
   const furnishing = extractFurnishing(text);
   const contactPhone = extractPhone(text);
+  const textImages = extractImageUrls(text);
+  const imageUrls = externalImageUrls && externalImageUrls.length > 0 ? externalImageUrls : textImages;
 
   return {
     rent,
@@ -242,6 +292,7 @@ export function extractAllEntities(text: string): ExtractedEntities {
     isBrokerage,
     isGatedSociety: societyInfo.isGatedSociety,
     societyName: societyInfo.societyName,
+    landmark,
     hasSwimmingPool: societyInfo.hasSwimmingPool,
     hasPowerBackup: societyInfo.hasPowerBackup,
     hasAttachedWashroom,
@@ -255,5 +306,7 @@ export function extractAllEntities(text: string): ExtractedEntities {
     contactPhone,
     societyLat: societyInfo.societyLat,
     societyLon: societyInfo.societyLon,
+    imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
   };
 }
+

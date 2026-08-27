@@ -1,4 +1,4 @@
-import { TARGET_LOCATIONS, EXCLUDED_LOCATIONS, UNDERPASS_BLOCKED_PATTERNS } from '../config';
+import { TARGET_LOCATIONS, EXCLUDED_LOCATIONS, UNDERPASS_BLOCKED_PATTERNS, KNOWN_SOCIETIES } from '../config';
 import { BHKType, ValidatedPostDetails, Result, ok, err, FilterRejectionError } from '../types';
 
 /**
@@ -19,8 +19,8 @@ export function isAfterRailwayUnderpass(text: string): boolean {
 
 /**
  * Checks whether the post text explicitly matches the target perimeter
- * (Kadubeesanahalli, PTP, Cessna, PTP Back Gate, Boganahalli, Devarabisanahalli, Panathur, Marathahalli)
- * and strictly excludes non-target locations (e.g. Whitefield, HSR, Electronic City)
+ * (Kadubeesanahalli, PTP, Cessna, PTP Back Gate, Boganahalli, Devarabisanahalli, Panathur, Marathahalli, Bellandur, ETV, Ecoworld, etc.)
+ * or any verified society in KNOWN_SOCIETIES, and strictly excludes non-target locations
  * or posts located past the Panathur railway underpass.
  *
  * @param text - The raw or cleaned post text.
@@ -28,6 +28,7 @@ export function isAfterRailwayUnderpass(text: string): boolean {
  */
 export function isValidLocation(text: string): Result<string, FilterRejectionError> {
   const textLower = text.toLowerCase();
+  const textClean = textLower.replace(/[\s-]/g, '');
 
   // 1. Strict Underpass Trap Filter
   if (isAfterRailwayUnderpass(text)) {
@@ -42,7 +43,14 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
     }
   }
 
-  // 3. Check for matched target area
+  // 3. First check for Known Society Matches
+  for (const [key, society] of Object.entries(KNOWN_SOCIETIES)) {
+    if (textClean.includes(key) || textLower.includes(society.name.toLowerCase())) {
+      return ok(society.name);
+    }
+  }
+
+  // 4. Check for matched target area
   let matchedTarget: string | null = null;
 
   for (const target of TARGET_LOCATIONS) {
@@ -58,12 +66,12 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
     }
   }
 
-  // 4. If target location was found, verify it is not primarily in an excluded distant location
+  // 5. If target location was found, verify it is not primarily in an excluded distant location
   if (matchedTarget) {
     for (const excl of EXCLUDED_LOCATIONS) {
       const explicitExclLocationPattern = new RegExp(`\\b(?:flat|room|apartment|house|stay|located)\\s+(?:in|at)\\s+${escapeRegExp(excl)}\\b`, 'i');
       if (explicitExclLocationPattern.test(textLower)) {
-        const hasDirectTarget = /\b(?:in|at|near|opposite)\s+(?:kadubeesanahalli|ptp|prestige tech park|cessna|panathur|boganahalli|bhoganahalli|devarabisanahalli|marathahalli)\b/i.test(textLower);
+        const hasDirectTarget = /\b(?:in|at|near|opposite)\s+(?:kadubeesanahalli|ptp|prestige tech park|cessna|panathur|boganahalli|bhoganahalli|devarabisanahalli|marathahalli|bellandur|ecoworld|etv)\b/i.test(textLower);
         if (!hasDirectTarget) {
           return err(new FilterRejectionError(`Excluded location: ${excl}`, text.slice(0, 100)));
         }
@@ -73,7 +81,7 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
     return ok(matchedTarget);
   }
 
-  // 5. No target location found: check if explicitly in an excluded location
+  // 6. No target location found: check if explicitly in an excluded location
   for (const excl of EXCLUDED_LOCATIONS) {
     const wordPattern = new RegExp(`\\b${escapeRegExp(excl)}\\b`, 'i');
     if (wordPattern.test(textLower)) {

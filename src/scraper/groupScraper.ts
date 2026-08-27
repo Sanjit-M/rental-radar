@@ -145,19 +145,9 @@ export async function processPost(
   postUrl: string = '',
   createdAtISO?: string,
   fbPostIdOverride?: FbPostId,
-  initialStatus: UserListingStatus = 'new'
+  initialStatus: UserListingStatus = 'new',
+  imageUrls?: string[]
 ): Promise<RentalListing | null> {
-  // Strict check: Require exact direct post permalink (Facebook or Telegram)
-  if (
-    !postUrl ||
-    (!postUrl.includes('/posts/') &&
-      !postUrl.includes('story_fbid=') &&
-      !postUrl.includes('/permalink/') &&
-      !postUrl.includes('t.me/'))
-  ) {
-    return null;
-  }
-
   const clean = cleanPostText(rawText);
 
   // 1. Filter Validation via Result monad
@@ -168,8 +158,8 @@ export async function processPost(
 
   const { location, bhkType } = filterResult.value;
 
-  // 2. Entity Extraction
-  const entities = extractAllEntities(clean);
+  // 2. Entity Extraction with image attachments
+  const entities = extractAllEntities(clean, imageUrls);
 
   // 3. Weekday Peak Commute Simulation
   const commute = calculatePeakScooterCommute(
@@ -183,15 +173,23 @@ export async function processPost(
   const { score, breakdown, tier } = computeListingScore(entities, commute);
 
   const fbPostId = fbPostIdOverride || generatePostId(groupName, authorName, clean);
+  const finalPostUrl = postUrl || `https://www.facebook.com/groups/posts/${fbPostId}`;
+  const images = entities.imageUrls || imageUrls || [];
+  const title = `${bhkType} in ${entities.societyName || location}`;
+  const summary = clean.slice(0, 250);
 
   const listing: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string | undefined } = {
     fbPostId,
     groupName,
-    postUrl,
+    postUrl: finalPostUrl,
     authorName,
     postedTime,
     rawText: clean,
     location,
+    landmark: entities.landmark || undefined,
+    title,
+    summary,
+    imageUrls: images.length > 0 ? images : undefined,
     bhkType,
     entities,
     commute,
@@ -369,20 +367,42 @@ async function scrapeSourceWorker(
           }
         }
 
-        // Strict Post-Only Filter per Q2 (Option A): Drop if no direct post permalink
-        if (!postUrl) continue;
+        // Extract photo attachments
+        const imageUrls: string[] = [];
+        try {
+          const imgEls = await el.$$('img');
+          for (const img of imgEls) {
+            const src = await img.getAttribute('src');
+            if (
+              src &&
+              (src.includes('fbcdn') || src.includes('scontent') || src.startsWith('http')) &&
+              !src.includes('emoji') &&
+              !src.includes('rsrc.php') &&
+              !src.includes('static.xx')
+            ) {
+              imageUrls.push(src);
+            }
+          }
+        } catch {
+          // Ignore
+        }
+
+        const effectivePostUrl = postUrl || `https://www.facebook.com/groups/posts/fb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
         // Atomic deduplication check
-        if (seenUrls.has(postUrl)) continue;
-        seenUrls.add(postUrl);
+        if (seenUrls.has(effectivePostUrl)) continue;
+        seenUrls.add(effectivePostUrl);
 
         const matchedListing = await processPost(
           text,
           source.name,
           authorName,
           parsedTimestamp.formattedIST,
-          postUrl,
-          parsedTimestamp.date.toISOString()
+          effectivePostUrl,
+          parsedTimestamp.date.toISOString(),
+          undefined,
+          'new',
+          imageUrls
         );
 
         if (matchedListing) {
@@ -440,7 +460,11 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
         post.groupName,
         post.authorName,
         post.postedTime,
-        post.postUrl
+        post.postUrl,
+        undefined,
+        undefined,
+        'new',
+        post.imageUrls
       );
 
       if (matchedListing) {
@@ -471,7 +495,11 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
           post.groupName,
           post.authorName,
           post.postedTime,
-          post.postUrl
+          post.postUrl,
+          undefined,
+          undefined,
+          'new',
+          post.imageUrls
         );
 
         if (matchedListing) {

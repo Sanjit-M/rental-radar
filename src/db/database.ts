@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS listings (
   posted_time TEXT NOT NULL DEFAULT 'Recently',
   raw_text TEXT NOT NULL,
   location TEXT NOT NULL,
+  landmark TEXT,
+  title TEXT,
+  summary TEXT,
+  image_urls TEXT DEFAULT '[]',
   bhk_type TEXT NOT NULL,
   rent INTEGER,
   deposit INTEGER,
@@ -98,7 +102,24 @@ class WebLibSqlDatabase implements IDatabase {
         }
       }
     }
+
+    // Auto-migration for existing databases
+    const migrations = [
+      'ALTER TABLE listings ADD COLUMN landmark TEXT',
+      'ALTER TABLE listings ADD COLUMN title TEXT',
+      'ALTER TABLE listings ADD COLUMN summary TEXT',
+      "ALTER TABLE listings ADD COLUMN image_urls TEXT DEFAULT '[]'",
+    ];
+
+    for (const mig of migrations) {
+      try {
+        await this.client.execute(mig);
+      } catch {
+        // Column already exists, ignore
+      }
+    }
   }
+
 
   async execute(sql: string, args: any[] = []): Promise<{ changes: number; lastInsertRowid?: number | bigint | undefined }> {
     await this.ensureInitialized();

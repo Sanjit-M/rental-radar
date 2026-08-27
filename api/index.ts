@@ -3,6 +3,11 @@ import { cors } from 'hono/cors';
 import { createClient } from '@libsql/client/web';
 import { PTP_COORDINATES, SCORING_CONFIG, TARGET_LOCATIONS } from '../src/domain/config';
 import { deduplicateListings } from '../src/domain/parser/deduplicator';
+import { passesAllFilters } from '../src/domain/parser/filter';
+import { extractAllEntities } from '../src/domain/parser/extractor';
+import { calculatePeakScooterCommute } from '../src/domain/commute/router';
+import { computeListingScore } from '../src/domain/scorer/ratingEngine';
+import { cleanPostText, generatePostId } from '../src/domain/parser/cleaner';
 import {
   RentalListing,
   ExtractedEntities,
@@ -44,6 +49,10 @@ CREATE TABLE IF NOT EXISTS listings (
   posted_time TEXT NOT NULL DEFAULT 'Recently',
   raw_text TEXT NOT NULL,
   location TEXT NOT NULL,
+  landmark TEXT,
+  title TEXT,
+  summary TEXT,
+  image_urls TEXT DEFAULT '[]',
   bhk_type TEXT NOT NULL,
   rent INTEGER,
   deposit INTEGER,
@@ -92,16 +101,43 @@ async function ensureSchema(client: any) {
   } catch {
     // Ignore already exists
   }
+
+  // Auto-migration
+  const migrations = [
+    'ALTER TABLE listings ADD COLUMN landmark TEXT',
+    'ALTER TABLE listings ADD COLUMN title TEXT',
+    'ALTER TABLE listings ADD COLUMN summary TEXT',
+    "ALTER TABLE listings ADD COLUMN image_urls TEXT DEFAULT '[]'",
+  ];
+
+  for (const mig of migrations) {
+    try {
+      await client.execute(mig);
+    } catch {
+      // Ignore if already added
+    }
+  }
+
   schemaReady = true;
 }
 
 function mapRow(row: any): RentalListing {
+  let parsedImages: string[] = [];
+  if (row.image_urls) {
+    try {
+      parsedImages = JSON.parse(row.image_urls);
+    } catch {
+      parsedImages = [];
+    }
+  }
+
   const entities: ExtractedEntities = {
     rent: row.rent !== null ? makeINR(Number(row.rent)) : null,
     deposit: row.deposit !== null ? makeINR(Number(row.deposit)) : null,
     isBrokerage: Boolean(row.is_brokerage),
     isGatedSociety: Boolean(row.is_gated_society),
     societyName: row.society_name || null,
+    landmark: row.landmark || null,
     hasSwimmingPool: Boolean(row.has_swimming_pool),
     hasPowerBackup: Boolean(row.has_power_backup),
     hasAttachedWashroom: Boolean(row.has_attached_washroom),
@@ -113,6 +149,7 @@ function mapRow(row: any): RentalListing {
     furnishing: row.furnishing as FurnishingStatus,
     isKadubeesanahalliDirect: Boolean(row.is_kadubeesanahalli_direct),
     contactPhone: row.contact_phone || null,
+    imageUrls: parsedImages.length > 0 ? parsedImages : undefined,
   };
 
   const commute: CommuteWindow = {
@@ -154,6 +191,10 @@ function mapRow(row: any): RentalListing {
     postedTime: row.posted_time || 'Recently',
     rawText: row.raw_text,
     location: row.location,
+    landmark: row.landmark || undefined,
+    title: row.title || undefined,
+    summary: row.summary || undefined,
+    imageUrls: parsedImages.length > 0 ? parsedImages : undefined,
     bhkType: row.bhk_type as BHKType,
     entities,
     commute,
@@ -262,9 +303,9 @@ const getListingsHandler = async (c: any) => {
       whereClause += buildRecencySqlCondition(recency);
     }
     if (search) {
-      whereClause += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
+      whereClause += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR landmark LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
       const t = `%${search}%`;
-      args.push(t, t, t, t, t);
+      args.push(t, t, t, t, t, t);
     }
 
     let orderClause = ' ORDER BY score DESC, created_at DESC';
@@ -435,6 +476,68 @@ app.post('/api/scrape/trigger', triggerRouteHandler);
 app.post('/scrape/seed', triggerRouteHandler);
 app.post('/api/scrape/seed', triggerRouteHandler);
 
+// Scrape Status Polling Handler (Checks GitHub Actions workflow run status)
+const scrapeStatusHandler = async (c: any) => {
+  try {
+    const token = process.env.GITHUB_DISPATCH_TOKEN || process.env.GITHUB_TOKEN;
+    const repo = process.env.GITHUB_REPO || 'Sanjit-M/rental-radar';
+    const workflow = process.env.GITHUB_WORKFLOW || 'scraper.yml';
+
+    if (!token) {
+      return c.json({
+        status: 'idle',
+        conclusion: null,
+        message: 'No GitHub token configured',
+      });
+    }
+
+    const runsUrl = `https://api.github.com/repos/${repo}/actions/workflows/${workflow}/runs?per_page=1`;
+    const res = await fetch(runsUrl, {
+      headers: {
+        Accept: 'application/vnd.github.v3+json',
+        Authorization: `Bearer ${token}`,
+        'User-Agent': 'Rental-Radar-Trigger',
+      },
+    });
+
+    if (!res.ok) {
+      return c.json({
+        status: 'idle',
+        conclusion: null,
+        message: `GitHub API error: ${res.statusText}`,
+      });
+    }
+
+    const data: any = await res.json();
+    const run = data.workflow_runs?.[0];
+    if (!run) {
+      return c.json({
+        status: 'idle',
+        conclusion: null,
+        message: 'No workflow runs found',
+      });
+    }
+
+    return c.json({
+      status: run.status,
+      conclusion: run.conclusion,
+      runId: run.id,
+      htmlUrl: run.html_url,
+      createdAt: run.created_at,
+      updatedAt: run.updated_at,
+    });
+  } catch (err: any) {
+    return c.json({
+      status: 'idle',
+      conclusion: null,
+      error: err?.message || String(err),
+    });
+  }
+};
+
+app.get('/scrape/status', scrapeStatusHandler);
+app.get('/api/scrape/status', scrapeStatusHandler);
+
 // Status Update Handler
 const updateStatusHandler = async (c: any) => {
   try {
@@ -455,4 +558,149 @@ const updateStatusHandler = async (c: any) => {
 app.patch('/listings/:id/status', updateStatusHandler);
 app.patch('/api/listings/:id/status', updateStatusHandler);
 
+// Single Post Quick Parse & Ingest Handler (Interactive Test Mode)
+const parseSingleHandler = async (c: any) => {
+  try {
+    const body = await c.req.json();
+    const rawText = body.text || '';
+    const postUrl = body.postUrl || `https://www.facebook.com/groups/posts/manual_${Date.now()}`;
+    const authorName = body.authorName || 'Manual Ingestion';
+    const groupName = body.groupName || 'Manual Submission';
+    const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
+
+    if (!rawText || rawText.trim().length < 15) {
+      return c.json({ success: false, error: 'Text too short (must be at least 15 characters)' }, 400);
+    }
+
+    const clean = cleanPostText(rawText);
+    const filterResult = passesAllFilters(clean);
+    if (filterResult._tag === 'err') {
+      return c.json({
+        success: false,
+        filtered: true,
+        reason: filterResult.error.message,
+      }, 200);
+    }
+
+    const { location, bhkType } = filterResult.value;
+    const entities = extractAllEntities(clean, imageUrls);
+    const commute = calculatePeakScooterCommute(
+      entities.societyLat,
+      entities.societyLon,
+      location,
+      entities.isKadubeesanahalliDirect
+    );
+    const { score, breakdown, tier } = computeListingScore(entities, commute);
+    const fbPostId = generatePostId(groupName, authorName, clean);
+
+    const client = getDbClient();
+    await ensureSchema(client);
+
+    const upsertSql = `
+      INSERT INTO listings (
+        fb_post_id, group_name, post_url, author_name, posted_time, raw_text,
+        location, landmark, title, summary, image_urls,
+        bhk_type, rent, deposit, is_brokerage,
+        is_gated_society, society_name, has_swimming_pool,
+        has_power_backup, has_attached_washroom, has_balcony,
+        furnishing, is_kadubeesanahalli_direct, contact_phone,
+        distance_km, inbound_mins, outbound_mins, two_way_avg_peak_mins,
+        has_panathur_underpass_bottleneck, score, score_breakdown, tier,
+        user_status, created_at, updated_at
+      ) VALUES (
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, datetime('now'), datetime('now')
+      )
+      ON CONFLICT(fb_post_id) DO UPDATE SET
+        author_name=excluded.author_name,
+        landmark=excluded.landmark,
+        title=excluded.title,
+        summary=excluded.summary,
+        image_urls=excluded.image_urls,
+        rent=excluded.rent,
+        deposit=excluded.deposit,
+        score=excluded.score,
+        score_breakdown=excluded.score_breakdown,
+        tier=excluded.tier,
+        updated_at=datetime('now');
+    `;
+
+    const imagesToSave = entities.imageUrls || imageUrls || [];
+    const title = `${bhkType} in ${entities.societyName || location}`;
+    const summary = clean.slice(0, 250);
+
+    await client.execute({
+      sql: upsertSql,
+      args: [
+        fbPostId,
+        groupName,
+        postUrl,
+        authorName,
+        'Just now',
+        clean,
+        location,
+        entities.landmark || null,
+        title,
+        summary,
+        JSON.stringify(imagesToSave),
+        bhkType,
+        entities.rent !== null ? entities.rent : null,
+        entities.deposit !== null ? entities.deposit : null,
+        entities.isBrokerage ? 1 : 0,
+        entities.isGatedSociety ? 1 : 0,
+        entities.societyName,
+        entities.hasSwimmingPool ? 1 : 0,
+        entities.hasPowerBackup ? 1 : 0,
+        entities.hasAttachedWashroom ? 1 : 0,
+        entities.hasBalcony ? 1 : 0,
+        entities.furnishing,
+        entities.isKadubeesanahalliDirect ? 1 : 0,
+        entities.contactPhone,
+        commute.distanceKm,
+        commute.inboundMins,
+        commute.outboundMins,
+        commute.twoWayAvgPeakMins,
+        commute.hasPanathurUnderpassBottleneck ? 1 : 0,
+        score,
+        JSON.stringify(breakdown),
+        tier,
+        'new',
+      ],
+    });
+
+    return c.json({
+      success: true,
+      listing: {
+        fbPostId,
+        location,
+        societyName: entities.societyName,
+        landmark: entities.landmark,
+        title,
+        summary,
+        imageUrls: imagesToSave,
+        bhkType,
+        rent: entities.rent,
+        deposit: entities.deposit,
+        score,
+        tier,
+        commute,
+        entities,
+      },
+    });
+  } catch (err: any) {
+    return c.json({ success: false, error: err?.message || String(err) }, 500);
+  }
+};
+
+app.post('/scrape/parse-single', parseSingleHandler);
+app.post('/api/scrape/parse-single', parseSingleHandler);
+
 export default app.fetch;
+

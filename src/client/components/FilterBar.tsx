@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutGrid, List, Map, Search, RotateCcw, Clock } from 'lucide-react';
+import { LayoutGrid, List, Search, RotateCcw, Clock } from 'lucide-react';
 import { SortBy } from '../../domain/types';
 
 interface FilterBarProps {
@@ -21,8 +21,8 @@ interface FilterBarProps {
   onSortByChange: (value: SortBy) => void;
   limit: number;
   onLimitChange: (limit: number) => void;
-  viewMode: 'grid' | 'table' | 'map';
-  onViewModeChange: (mode: 'grid' | 'table' | 'map') => void;
+  viewMode: 'grid' | 'table';
+  onViewModeChange: (mode: 'grid' | 'table') => void;
   onResetFilters: () => void;
 }
 
@@ -95,7 +95,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             </select>
           </div>
 
-          {/* View Mode Toggle: Grid / Table / Map */}
+          {/* View Mode Toggle: Grid / Table */}
           <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-700/80">
             <button
               onClick={() => onViewModeChange('grid')}
@@ -118,17 +118,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               title="High-Density Table View"
             >
               <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onViewModeChange('map')}
-              className={`p-1.5 rounded-lg transition-colors ${
-                viewMode === 'map'
-                  ? 'bg-emerald-500 text-slate-950 font-bold'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-              title="OpenStreetMap View"
-            >
-              <Map className="w-4 h-4" />
             </button>
           </div>
         </div>

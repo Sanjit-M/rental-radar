@@ -211,7 +211,7 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         expect(lowRes.score).toBeLessThan(55);
       });
 
-      it('F1.5: generates WhatsApp click-to-chat action URLs and Facebook post links for marker popups', () => {
+      it('F1.5: generates WhatsApp click-to-chat action URLs and Facebook post links for card and table actions', () => {
         const listing = makeTestListing({
           authorName: 'Vikram Mehta',
           postUrl: 'https://facebook.com/groups/flatmates/posts/999888',
@@ -227,11 +227,10 @@ describe('Rental Radar v2 — Comprehensive E2E Requirements Test Suite', () => 
         expect(listing.postUrl).toContain('facebook.com');
       });
 
-      it('F1.6: supports 3-way responsive view modes (grid, table, map) configuration contracts', () => {
-        const validModes: ('grid' | 'table' | 'map')[] = ['grid', 'table', 'map'];
+      it('F1.6: supports 2-way responsive view modes (grid, table) configuration contracts', () => {
+        const validModes: ('grid' | 'table')[] = ['grid', 'table'];
         expect(validModes).toContain('grid');
         expect(validModes).toContain('table');
-        expect(validModes).toContain('map');
       });
     });
 

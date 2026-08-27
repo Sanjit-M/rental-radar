@@ -74,6 +74,10 @@ interface RawDatabaseRow {
   posted_time: string;
   raw_text: string;
   location: string;
+  landmark?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  image_urls?: string | null;
   bhk_type: string;
   rent: number | null;
   deposit: number | null;
@@ -101,12 +105,22 @@ interface RawDatabaseRow {
 }
 
 function mapRowToListing(row: RawDatabaseRow): RentalListing {
+  let parsedImages: string[] = [];
+  if (row.image_urls) {
+    try {
+      parsedImages = JSON.parse(row.image_urls);
+    } catch {
+      parsedImages = [];
+    }
+  }
+
   const entities: ExtractedEntities = {
     rent: row.rent !== null ? makeINR(Number(row.rent)) : null,
     deposit: row.deposit !== null ? makeINR(Number(row.deposit)) : null,
     isBrokerage: Boolean(row.is_brokerage),
     isGatedSociety: Boolean(row.is_gated_society),
     societyName: row.society_name || null,
+    landmark: row.landmark || null,
     hasSwimmingPool: Boolean(row.has_swimming_pool),
     hasPowerBackup: Boolean(row.has_power_backup),
     hasAttachedWashroom: Boolean(row.has_attached_washroom),
@@ -120,6 +134,7 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
     furnishing: row.furnishing as FurnishingStatus,
     isKadubeesanahalliDirect: Boolean(row.is_kadubeesanahalli_direct),
     contactPhone: row.contact_phone || null,
+    imageUrls: parsedImages.length > 0 ? parsedImages : undefined,
   };
 
   const commute: CommuteWindow = {
@@ -166,6 +181,10 @@ function mapRowToListing(row: RawDatabaseRow): RentalListing {
     postedTime: row.posted_time || 'Recently',
     rawText: row.raw_text,
     location: row.location,
+    landmark: row.landmark || undefined,
+    title: row.title || undefined,
+    summary: row.summary || undefined,
+    imageUrls: parsedImages.length > 0 ? parsedImages : undefined,
     // SAFETY: `bhk_type` column is constrained by INSERT schema to the BHKType union.
     bhkType: row.bhk_type as BHKType,
     entities,
@@ -215,9 +234,9 @@ function buildWhereClause(options: ListingQueryOptions): { whereSql: string; par
   }
 
   if (options.search) {
-    whereSql += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
+    whereSql += ' AND (raw_text LIKE ? OR society_name LIKE ? OR location LIKE ? OR landmark LIKE ? OR author_name LIKE ? OR contact_phone LIKE ?)';
     const term = `%${options.search}%`;
-    params.push(term, term, term, term, term);
+    params.push(term, term, term, term, term, term);
   }
 
   return { whereSql, params };
@@ -249,7 +268,8 @@ export const listingRepository = {
     const upsertSql = `
       INSERT INTO listings (
         fb_post_id, group_name, post_url, author_name, posted_time, raw_text,
-        location, bhk_type, rent, deposit, is_brokerage,
+        location, landmark, title, summary, image_urls,
+        bhk_type, rent, deposit, is_brokerage,
         is_gated_society, society_name, has_swimming_pool,
         has_power_backup, has_attached_washroom, has_balcony,
         furnishing, is_kadubeesanahalli_direct, contact_phone,
@@ -259,6 +279,7 @@ export const listingRepository = {
       ) VALUES (
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
+        ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
@@ -269,6 +290,10 @@ export const listingRepository = {
       ON CONFLICT(fb_post_id) DO UPDATE SET
         author_name=excluded.author_name,
         posted_time=excluded.posted_time,
+        landmark=excluded.landmark,
+        title=excluded.title,
+        summary=excluded.summary,
+        image_urls=excluded.image_urls,
         rent=excluded.rent,
         deposit=excluded.deposit,
         score=excluded.score,
@@ -280,6 +305,8 @@ export const listingRepository = {
         updated_at=datetime('now');
     `;
 
+    const imagesToSave = listing.imageUrls || listing.entities.imageUrls || [];
+
     await db.execute(upsertSql, [
       listing.fbPostId,
       listing.groupName,
@@ -288,6 +315,10 @@ export const listingRepository = {
       listing.postedTime || 'Recently',
       listing.rawText,
       listing.location,
+      listing.landmark || listing.entities.landmark || null,
+      listing.title || null,
+      listing.summary || null,
+      JSON.stringify(imagesToSave),
       listing.bhkType,
       listing.entities.rent !== null ? listing.entities.rent : null,
       listing.entities.deposit !== null ? listing.entities.deposit : null,

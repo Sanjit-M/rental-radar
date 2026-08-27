@@ -9,11 +9,10 @@ Rental Radar v2 is a full-stack high-performance rental intelligence platform fo
   - `src/domain/parser/deduplicator.ts`: Multi-signal cross-group deduplication engine utilizing exact post ID matching, normalized contact numbers, and Jaccard 3-gram text similarity.
   - `src/domain/config.ts`: Society coordinates, locality anchors, scoring weights, and commute matrices.
 - **Frontend**: Vite 5 + React 18 + Tailwind CSS.
-  - `src/client/App.tsx`: Main dashboard state, view switcher (`'grid' | 'table' | 'map'`), pagination controls.
-  - `src/client/components/MapView.tsx`: Interactive OpenStreetMap Leaflet component with CartoDB Dark Matter tiles, custom score markers, and popups.
+  - `src/client/App.tsx`: Main dashboard state, view switcher (`'grid' | 'table'`), pagination controls.
   - `src/client/components/ListingCard.tsx`: Grid view card with expandable descriptions and multi-group badges.
   - `src/client/components/ListingTable.tsx`: High-density tabular view with multi-group badges.
-  - `src/client/components/FilterBar.tsx`: Dynamic filters including Recency time windows, BHK, Rent, Score, Furnishing, Status, and View Mode.
+  - `src/client/components/FilterBar.tsx`: Dynamic filters including Recency time windows, BHK, Rent, Score, Furnishing, Status, and 2-Way View Mode.
   - `src/client/components/HeaderStats.tsx`: Key rental metrics and real-time dashboard header.
 
 ---
@@ -21,21 +20,19 @@ Rental Radar v2 is a full-stack high-performance rental intelligence platform fo
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| F1 | CartoDB Dark Matter Leaflet Map | Interactive OpenStreetMap in dark theme without external API keys | M2 | R1 |
-| F2 | Society Coordinate Pinpoints & Score Badges | Markers for recognized societies around PTP with score pill badges | M2 | R1 |
-| F3 | Interactive Marker Popups | Rich popups showing rent, commute, author info, WhatsApp & FB links | M2 | R1 |
-| F4 | 3-Way Responsive View Switching | Seamless toggle between Map View, Grid View, and High-Density Table View | M2 | R1 |
-| F5 | Cross-Group Deduplication Engine | Detect and merge cross-posted listings across FB groups by author, phone, text similarity | M1 | R2 |
-| F6 | Multi-Group "Seen in X groups" Badge | Display multi-group provenance badge on canonical listings in cards & table | M2 | R2 |
-| F7 | Recency Time-Window Filtering | Filter listings by publication recency (1h, 3h, 6h, 12h, 24h, 7d, all) | M1, M2 | R2 |
-| F8 | Refined 0–100 Scoring Algorithm | Implement -50 veg penalty, -30 broker penalty, -15 deposit penalty (>2.2x), +15 walking (<500m), +10 bachelor match, -5 shared washroom | M1 | R3 |
-| F9 | Server-Side Database Pagination | SQL LIMIT / OFFSET on `/api/listings` with `page`, `limit` (default 12), `totalCount`, `totalPages`, `hasMore` | M1 | R4 |
-| F10 | Passcode Gate Removal for Scrapers | Remove passcode restriction on `/api/scrape/trigger` and `/api/scrape/seed` | M1 | R4 |
-| F11 | Expandable Post Descriptions | Click/tap to expand truncated post descriptions in UI | M2 | R4 |
-| F12 | Sample Data Button Removal | Remove "Load Sample Data" button from header | M2 | R4 |
-| F13 | Complete Emoji-Free Documentation | Comprehensive `README.md` for local development and Vercel hosting without emojis | M3 | R5 |
-| F14 | 100% Vitest Unit Test & Build Verification | All unit tests pass (`pnpm test`) and production build succeeds (`pnpm build`) | M3, E2E | R5 |
-| F15 | Comprehensive E2E Test Suite | 4-Tier requirement-driven opaque-box test suite + Tier 5 adversarial tests | E2E | R1–R5 |
+| F1 | 2-Way Responsive View Switching | Seamless toggle between Card Grid View and High-Density Table View | M2 | R1 |
+| F2 | Direct Action Outreach Links | One-click WhatsApp, direct phone call, and original FB post URLs | M2 | R1 |
+| F3 | Cross-Group Deduplication Engine | Detect and merge cross-posted listings across FB groups by author, phone, text similarity | M1 | R2 |
+| F4 | Multi-Group "Seen in X groups" Badge | Display multi-group provenance badge on canonical listings in cards & table | M2 | R2 |
+| F5 | Recency Time-Window Filtering | Filter listings by publication recency (1h, 3h, 6h, 12h, 24h, 7d, all) | M1, M2 | R2 |
+| F6 | Refined 0–100 Scoring Algorithm | Implement -50 veg penalty, -30 broker penalty, -15 deposit penalty (>2.2x), +15 walking (<500m), +10 bachelor match, -5 shared washroom | M1 | R3 |
+| F7 | Server-Side Database Pagination | SQL LIMIT / OFFSET on `/api/listings` with `page`, `limit` (default 12), `totalCount`, `totalPages`, `hasMore` | M1 | R4 |
+| F8 | Passcode Gate Removal for Scrapers | Remove passcode restriction on `/api/scrape/trigger` and `/api/scrape/seed` | M1 | R4 |
+| F9 | Expandable Post Descriptions | Click/tap to expand truncated post descriptions in UI | M2 | R4 |
+| F10 | Sample Data Button Removal | Remove "Load Sample Data" button from header | M2 | R4 |
+| F11 | Complete Emoji-Free Documentation | Comprehensive `README.md` for local development and Vercel hosting without emojis | M3 | R5 |
+| F12 | 100% Vitest Unit Test & Build Verification | All unit tests pass (`pnpm test`) and production build succeeds (`pnpm build`) | M3, E2E | R5 |
+| F13 | Comprehensive E2E Test Suite | 4-Tier requirement-driven opaque-box test suite + Tier 5 adversarial tests | E2E | R1–R5 |
 
 ---
 
@@ -43,7 +40,7 @@ Rental Radar v2 is a full-stack high-performance rental intelligence platform fo
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | M1 | Backend & Data Engine | Server-side SQL pagination, recency query filtering, scrape passcode ungate, scoring engine validation, and deduplication pipeline | none | DONE |
-| M2 | Geospatial Map & Frontend UI | Leaflet CartoDB Dark Matter map view, 3-way view toggle, recency filter UI, expandable descriptions, multi-group badge, sample data button removal, and pagination controls | M1 | DONE |
+| M2 | Frontend UI & Post Browsing | 2-way view toggle (Grid & Table), recency filter UI, expandable descriptions, multi-group badge, sample data button removal, and pagination controls | M1 | DONE |
 | M3 | Documentation, Verification & Build | Emoji-free README.md, Vitest test suite validation, production build verification, and deployment readiness | M1, M2 | DONE |
 | E2E | E2E Testing Track | Independent requirement-driven test suite (Tiers 1–4) publishing TEST_READY.md, followed by Tier 5 adversarial verification | none (parallel) | DONE (130 tests passed) |
 
@@ -123,10 +120,9 @@ Rental Radar v2 is a full-stack high-performance rental intelligence platform fo
 - `src/domain/scorer/ratingEngine.ts`: Scoring engine and tier categorization
 - `src/domain/parser/deduplicator.ts`: Multi-group duplicate detection and canonical record merging
 - `src/client/App.tsx`: Main React UI root, view mode state, pagination state
-- `src/client/components/MapView.tsx`: Leaflet CartoDB Dark Matter map view
 - `src/client/components/ListingCard.tsx`: Grid card component with expandable description and badges
 - `src/client/components/ListingTable.tsx`: Table row component with multi-group badges
-- `src/client/components/FilterBar.tsx`: Filter controls with recency and 3-way view switcher
+- `src/client/components/FilterBar.tsx`: Filter controls with recency and 2-way view switcher
 - `src/client/components/HeaderStats.tsx`: Header metrics without sample data button
 - `src/client/services/api.ts`: Frontend client API client
 - `tests/`: Vitest unit and integration test suites

@@ -15,7 +15,6 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
-  MapPin,
   Leaf,
 } from 'lucide-react';
 
@@ -23,14 +22,12 @@ interface ListingCardProps {
   listing: RentalListing;
   onStatusChange: (id: number, status: UserListingStatus) => void;
   onOpenScoreModal: (listing: RentalListing) => void;
-  onFocusMap?: (listing: RentalListing) => void;
 }
 
 export const ListingCard: React.FC<ListingCardProps> = ({
   listing,
   onStatusChange,
   onOpenScoreModal,
-  onFocusMap,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const e = listing.entities;
@@ -230,16 +227,6 @@ export const ListingCard: React.FC<ListingCardProps> = ({
 
         {/* Contact & Link Actions */}
         <div className="flex items-center gap-1.5">
-          {onFocusMap && (
-            <button
-              onClick={() => onFocusMap(listing)}
-              className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 border border-indigo-500/30 transition-colors"
-              title="Locate on OpenStreetMap"
-            >
-              <MapPin className="w-4 h-4" />
-            </button>
-          )}
-
           {e.contactPhone && (
             <>
               <a

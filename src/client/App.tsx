@@ -3,7 +3,6 @@ import { RentalListing, DashboardStats, UserListingStatus, SortBy } from '../dom
 import { FilterBar } from './components/FilterBar';
 import { ListingCard } from './components/ListingCard';
 import { ListingTable } from './components/ListingTable';
-import { MapView } from './components/MapView';
 import { ScoreBreakdownModal } from './components/ScoreBreakdownModal';
 import { api } from './services/api';
 import {
@@ -17,6 +16,8 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -24,7 +25,7 @@ export const App: React.FC = () => {
   const [listings, setListings] = useState<RentalListing[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [scraping, setScraping] = useState(false);
+  const [scrapePhase, setScrapePhase] = useState<'idle' | 'running' | 'completed' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [scrapeNotice, setScrapeNotice] = useState<string | null>(null);
 
@@ -44,7 +45,7 @@ export const App: React.FC = () => {
   const [recency, setRecency] = useState('all');
   const [sortBy, setSortBy] = useState<SortBy>('score_desc');
   const [limit, setLimit] = useState<number>(12);
-  const [viewMode, setViewMode] = useState<'grid' | 'table' | 'map'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   // Modal State
   const [selectedScoreListing, setSelectedScoreListing] = useState<RentalListing | null>(null);
@@ -118,17 +119,67 @@ export const App: React.FC = () => {
   };
 
   const handleTriggerScrape = async () => {
-    setScraping(true);
-    setScrapeNotice(null);
+    if (scrapePhase === 'running') return;
+    setScrapePhase('running');
+    setScrapeNotice('⚡ Dispatching live scraper workflow in GitHub Actions...');
+
     const result = await api.triggerScrape();
     if (result._tag === 'err') {
+      setScrapePhase('error');
       setScrapeNotice(`Scrape failed: ${result.error.message}`);
-    } else {
-      setScrapeNotice(result.value.message || 'Scrape cycle complete!');
-      fetchListings(1, false, limit);
-      fetchStats();
+      return;
     }
-    setScraping(false);
+
+    setScrapeNotice('⚡ GitHub Actions scraper is running... Scanning Facebook groups & syncing listings.');
+
+    // Poll for workflow run completion
+    let attempts = 0;
+    const maxAttempts = 60; // Up to ~3.5 minutes (60 * 3.5s)
+
+    const interval = setInterval(async () => {
+      attempts++;
+      const statusRes = await api.getScrapeStatus();
+
+      if (statusRes._tag === 'ok') {
+        const statusData = statusRes.value;
+
+        if (statusData.status === 'in_progress' || statusData.status === 'queued') {
+          setScrapeNotice(
+            `⚡ Scraper running (${attempts * 3}s elapsed)... Scraping groups and computing commute scores.`
+          );
+        } else if (statusData.status === 'completed') {
+          clearInterval(interval);
+
+          if (statusData.conclusion === 'success') {
+            setScrapePhase('completed');
+            setScrapeNotice('✓ Scrape complete! All new listings have been processed and synced to Turso.');
+            fetchListings(1, false, limit);
+            fetchStats();
+
+            setTimeout(() => {
+              setScrapePhase('idle');
+            }, 8000);
+          } else {
+            setScrapePhase('error');
+            setScrapeNotice(
+              `Scraper finished with status: ${statusData.conclusion || 'failed'}. Check GitHub Actions for details.`
+            );
+          }
+          return;
+        }
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        setScrapePhase('completed');
+        setScrapeNotice('✓ Scrape cycle window completed. Refreshing listings.');
+        fetchListings(1, false, limit);
+        fetchStats();
+        setTimeout(() => {
+          setScrapePhase('idle');
+        }, 8000);
+      }
+    }, 3500);
   };
 
   const handleResetFilters = () => {
@@ -184,19 +235,51 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
             <button
               onClick={handleTriggerScrape}
-              disabled={scraping}
-              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
+              disabled={scrapePhase === 'running'}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition-all ${
+                scrapePhase === 'completed'
+                  ? 'bg-emerald-600 text-white shadow-emerald-500/20'
+                  : scrapePhase === 'running'
+                  ? 'bg-amber-400 text-slate-950 shadow-amber-500/20'
+                  : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
+              } disabled:cursor-not-allowed`}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${scraping ? 'animate-spin' : ''}`} />
-              <span>{scraping ? 'Scanning Groups...' : 'Check Groups Now'}</span>
+              {scrapePhase === 'running' ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Scraping Groups (Live)...</span>
+                </>
+              ) : scrapePhase === 'completed' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                  <span>Scrape Complete ✓</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Check Groups Now</span>
+                </>
+              )}
             </button>
           </div>
         </header>
 
         {/* Live Notification Bar */}
         {scrapeNotice && (
-          <div className="glass-panel border-emerald-500/40 bg-emerald-950/40 text-emerald-300 p-3.5 rounded-2xl text-xs flex items-center justify-between shadow-lg">
-            <span>✨ {scrapeNotice}</span>
+          <div
+            className={`glass-panel p-3.5 rounded-2xl text-xs flex items-center justify-between shadow-lg ${
+              scrapePhase === 'error'
+                ? 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+                : scrapePhase === 'running'
+                ? 'border-amber-500/40 bg-amber-950/40 text-amber-300 animate-pulse'
+                : 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {scrapePhase === 'running' && <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-amber-400" />}
+              {scrapePhase === 'completed' && <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />}
+              <span>{scrapeNotice}</span>
+            </div>
             <button
               onClick={() => setScrapeNotice(null)}
               className="text-slate-400 hover:text-white font-bold ml-4"
@@ -309,12 +392,6 @@ export const App: React.FC = () => {
               Retry
             </button>
           </div>
-        ) : viewMode === 'map' ? (
-          <MapView
-            listings={listings}
-            onSelectListing={(l) => setSelectedScoreListing(l)}
-            onStatusChange={handleStatusChange}
-          />
         ) : viewMode === 'table' ? (
           <ListingTable
             listings={listings}
@@ -347,7 +424,6 @@ export const App: React.FC = () => {
                     listing={listing}
                     onStatusChange={handleStatusChange}
                     onOpenScoreModal={setSelectedScoreListing}
-                    onFocusMap={() => setViewMode('map')}
                   />
                 ))}
               </div>
@@ -356,7 +432,7 @@ export const App: React.FC = () => {
         )}
 
         {/* Server-Side Pagination Controls */}
-        {totalCount > 0 && viewMode !== 'map' && (
+        {totalCount > 0 && (
           <div className="glass-panel p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs shadow-xl">
             {/* Range / Total Count Info */}
             <div className="text-slate-400 font-medium text-center sm:text-left">

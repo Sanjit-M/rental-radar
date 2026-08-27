@@ -112,6 +112,13 @@ export function parseTelegramChannelHtml(html: string, channelName: string): Scr
     const authorMatch = blockHtml.match(/<div[^>]*class="[^"]*tgme_widget_message_owner_name[^"]*"[^>]*>([^<]+)<\/div>/);
     const authorName = (authorMatch && authorMatch[1]) ? authorMatch[1].trim() : `Telegram @${channelName}`;
 
+    // Extract photo attachments
+    const imageUrls: string[] = [];
+    const photoMatch = blockHtml.match(/tgme_widget_message_photo_wrap[^"]*"[^>]*style="[^"]*background-image:\s*url\(['"]?([^'")]+)['"]?\)/i);
+    if (photoMatch && photoMatch[1]) {
+      imageUrls.push(photoMatch[1]);
+    }
+
     posts.push({
       postId,
       postUrl,
@@ -119,6 +126,7 @@ export function parseTelegramChannelHtml(html: string, channelName: string): Scr
       postedTime: postedTimeStr,
       rawText,
       groupName: `Telegram @${channelName}`,
+      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
     });
   }
 

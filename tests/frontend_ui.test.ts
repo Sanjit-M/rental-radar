@@ -48,30 +48,20 @@ describe('Milestone 2 — Geospatial Map & Frontend UI Unit & Contract Tests', (
     });
   });
 
-  describe('4. Geospatial Map & Leaflet Tile Layer (R1 / Features F1–F4)', () => {
-    it('verifies MapView.tsx loads a free tile layer without external API keys', () => {
-      const mapViewPath = path.resolve(__dirname, '../src/client/components/MapView.tsx');
-      const content = fs.readFileSync(mapViewPath, 'utf8');
-
-      // CartoDB basemaps.cartocdn.com now requires a paid API key.
-      // Switched to free tile.openstreetmap.org with CSS dark mode filter.
-      expect(content).toContain('tile.openstreetmap.org');
-      expect(content).not.toMatch(/api_key|access_token|key=|token=/i);
-      expect(content).toContain('Prestige Tech Park');
-      expect(content).toContain('invalidateSize');
-    });
-
-    it('verifies FilterBar.tsx and App.tsx support 3-way view toggle (grid, table, map)', () => {
+  describe('4. Responsive View Toggle (Grid & Table)', () => {
+    it('verifies FilterBar.tsx and App.tsx support 2-way view toggle (grid, table)', () => {
       const filterBarPath = path.resolve(__dirname, '../src/client/components/FilterBar.tsx');
       const filterContent = fs.readFileSync(filterBarPath, 'utf8');
 
-      expect(filterContent).toContain("'grid' | 'table' | 'map'");
-      expect(filterContent).toContain('OpenStreetMap View');
+      expect(filterContent).toContain("'grid' | 'table'");
+      expect(filterContent).toContain('Card Grid View');
+      expect(filterContent).toContain('High-Density Table View');
+      expect(filterContent).not.toContain('OpenStreetMap View');
 
       const appPath = path.resolve(__dirname, '../src/client/App.tsx');
       const appContent = fs.readFileSync(appPath, 'utf8');
-      expect(appContent).toContain("viewMode === 'map'");
-      expect(appContent).toContain('<MapView');
+      expect(appContent).toContain("viewMode === 'table'");
+      expect(appContent).not.toContain('<MapView');
     });
   });
 

@@ -78,89 +78,38 @@ describe('Adversarial Verification Suite — Milestone 2 UI & Geospatial Map', (
   const rootDir = path.resolve(__dirname, '../../');
 
   // =========================================================================
-  // 1. LEAFLET MAP & TILE LAYER EMPIRICAL VERIFICATION
+  // 1. 2-WAY RESPONSIVE VIEW SWITCHING EMPIRICAL VERIFICATION
   // =========================================================================
-  describe('1. Leaflet Map & CartoDB Dark Matter Verification', () => {
-    const mapViewContent = fs.readFileSync(path.join(rootDir, 'src/client/components/MapView.tsx'), 'utf8');
-
-    it('1.1 uses free OpenStreetMap tile layer with zero external API keys (CartoDB requires paid key)', () => {
-      // CartoDB basemaps.cartocdn.com now requires a paid API key — switched to free OSM tiles
-      // with a CSS dark mode filter (invert + hue-rotate) to maintain dark theme
-      expect(mapViewContent).toContain('tile.openstreetmap.org');
-      expect(mapViewContent).toContain('&copy; OpenStreetMap contributors &copy; CARTO');
-      expect(mapViewContent).not.toMatch(/api_key|access_token|key=|token=/i);
-    });
-
-    it('1.2 pins Prestige Tech Park (PTP) at exact coordinates [12.9385, 77.6917]', () => {
-      expect(mapViewContent).toContain('PTP_COORDINATES.lat');
-      expect(mapViewContent).toContain('PTP_COORDINATES.lon');
-      expect(PTP_COORDINATES.lat).toBe(12.9385);
-      expect(PTP_COORDINATES.lon).toBe(77.6917);
-      expect(mapViewContent).toContain('ptp-office-pin');
-      expect(mapViewContent).toContain('🏢 Prestige Tech Park');
-      expect(mapViewContent).toContain('Primary Commute Destination Anchor');
-    });
-
-    it('1.3 clusters/groups markers by coordinate with score badges and count pills', () => {
-      expect(mapViewContent).toContain('coordsMap.set(key, [])');
-      expect(mapViewContent).toContain('primary.score >= 90');
-      expect(mapViewContent).toContain('primary.score >= 75');
-      expect(mapViewContent).toContain('+${count - 1}');
-    });
-
-    it('1.4 popup renders complete rental intelligence (rent, commute, WhatsApp, FB link)', () => {
-      expect(mapViewContent).toContain('twoWayAvgPeakMins}m peak commute');
-      expect(mapViewContent).toContain('https://wa.me/91');
-      expect(mapViewContent).toContain('View Post');
-    });
-
-    it('1.5 ensures clean lifecycle handling and prevents map resize glitches', () => {
-      expect(mapViewContent).toContain('mapInstanceRef.current.invalidateSize()');
-      expect(mapViewContent).toContain('mapInstanceRef.current.remove()');
-      expect(mapViewContent).toContain('mapInstanceRef.current = null');
-    });
-
-    it('1.6 confirms dark mode UI theme styling and legend overlay', () => {
-      expect(mapViewContent).toContain('glass-panel');
-      expect(mapViewContent).toContain('border-slate-800');
-      expect(mapViewContent).toContain('🔥 90+ Unicorn');
-      expect(mapViewContent).toContain('✨ 75+ Great');
-      expect(mapViewContent).toContain('⚡ 55+ Moderate');
-    });
-  });
-
-  // =========================================================================
-  // 2. 3-WAY RESPONSIVE VIEW SWITCHING EMPIRICAL VERIFICATION
-  // =========================================================================
-  describe('2. 3-Way Responsive View Switching (Grid / Table / Map)', () => {
+  describe('1. 2-Way Responsive View Switching (Grid / Table)', () => {
     const filterBarContent = fs.readFileSync(path.join(rootDir, 'src/client/components/FilterBar.tsx'), 'utf8');
     const appContent = fs.readFileSync(path.join(rootDir, 'src/client/App.tsx'), 'utf8');
     const listingCardContent = fs.readFileSync(path.join(rootDir, 'src/client/components/ListingCard.tsx'), 'utf8');
 
-    it('2.1 FilterBar provides 3-way toggle buttons for Grid, Table, and Map modes', () => {
+    it('1.1 FilterBar provides 2-way toggle buttons for Grid and Table modes', () => {
       expect(filterBarContent).toContain("viewMode === 'grid'");
       expect(filterBarContent).toContain("viewMode === 'table'");
-      expect(filterBarContent).toContain("viewMode === 'map'");
+      expect(filterBarContent).not.toContain("viewMode === 'map'");
       expect(filterBarContent).toContain('Card Grid View');
       expect(filterBarContent).toContain('High-Density Table View');
-      expect(filterBarContent).toContain('OpenStreetMap View');
+      expect(filterBarContent).not.toContain('OpenStreetMap View');
     });
 
-    it('2.2 App.tsx conditionally renders MapView, ListingTable, or ListingCard grid based on viewMode', () => {
-      expect(appContent).toContain("viewMode === 'map' ? (");
-      expect(appContent).toContain('<MapView');
+    it('1.2 App.tsx conditionally renders ListingTable or ListingCard grid based on viewMode', () => {
       expect(appContent).toContain("viewMode === 'table' ? (");
       expect(appContent).toContain('<ListingTable');
       expect(appContent).toContain('<ListingCard');
+      expect(appContent).not.toContain('<MapView');
     });
 
-    it('2.3 ListingCard provides a MapPin button that switches view to Map', () => {
-      expect(listingCardContent).toContain('onFocusMap');
-      expect(listingCardContent).toContain('Locate on OpenStreetMap');
-      expect(appContent).toContain("onFocusMap={() => setViewMode('map')}");
+    it('1.3 ListingCard provides direct contact actions (WhatsApp, Call, View Post) without map redirection', () => {
+      expect(listingCardContent).not.toContain('onFocusMap');
+      expect(listingCardContent).not.toContain('Locate on OpenStreetMap');
+      expect(listingCardContent).toContain('https://wa.me/91');
+      expect(listingCardContent).toContain('tel:');
+      expect(listingCardContent).toContain('Open Original Facebook Post');
     });
 
-    it('2.4 Responsive layout classes exist for mobile and desktop viewports', () => {
+    it('1.4 Responsive layout classes exist for mobile and desktop viewports', () => {
       // Grid view: 1 col on mobile, 2 cols on tablet, 3 cols on desktop
       expect(appContent).toContain('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5');
       // Table view: responsive horizontal scroll wrapper
@@ -246,8 +195,8 @@ describe('Adversarial Verification Suite — Milestone 2 UI & Geospatial Map', (
       expect(appContent).toContain('disabled={page >= totalPages || !hasMore || loading}');
     });
 
-    it('5.4 hides pagination bar completely when totalCount === 0 or viewMode is map', () => {
-      expect(appContent).toContain("totalCount > 0 && viewMode !== 'map'");
+    it('5.4 renders pagination bar when totalCount > 0', () => {
+      expect(appContent).toContain('{totalCount > 0 && (');
     });
 
     it('5.5 verifies pagination window and ellipsis generator algorithm against adversarial edge cases', () => {

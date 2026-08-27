@@ -10,8 +10,7 @@ Rental Radar is structured as a full-stack, edge-compatible application built wi
 
 - **Backend Edge API**: Hono web framework running on the Vercel Edge Runtime (`api/index.ts`) for sub-15ms serverless responses globally, with parity Node.js server support (`src/server/index.ts`) for local development and scraping automation.
 - **Database Layer**: Dual-mode SQLite and LibSQL client (`@libsql/client`). Supports local embedded storage (`file:data/listings.db`) and Turso Cloud SQLite over HTTPS/WSS.
-- **Frontend Dashboard**: React 18 single-page application bundled with Vite 5 and styled with Tailwind CSS. Includes 3-way view toggling (Card Grid, High-Density Table, Geospatial Map).
-- **Geospatial Mapping**: Leaflet OpenStreetMap integration utilizing CartoDB Dark Matter tiles, custom SVG/HTML score markers, and interactive listing popups without requiring third-party API keys or paid map subscriptions.
+- **Frontend Dashboard**: React 18 single-page application bundled with Vite 5 and styled with Tailwind CSS. Includes 2-way view toggling (Card Grid and High-Density Table).
 - **Intelligence Engines**:
   - `src/domain/scorer/ratingEngine.ts`: Pure, deterministic 0–100 scoring engine balancing financial parameters, housing constraints, amenities, and commute times.
   - `src/domain/parser/deduplicator.ts`: Multi-signal cross-group deduplication engine utilizing exact post IDs, contact numbers, author names, and Jaccard 3-gram text similarity.
@@ -21,23 +20,10 @@ Rental Radar is structured as a full-stack, edge-compatible application built wi
 
 ## 2. Key Features
 
-### 2.1 Interactive Geospatial Map
-- **CartoDB Dark Matter Integration**: High-performance vector tile layer rendered in a dark palette matching the dashboard theme. Operates without external API keys or rate limits.
-- **Society Pinpoints**: Pre-mapped coordinates for major gated societies around PTP:
-  - Sobha Iris
-  - Sobha Hibiscus
-  - Sobha Jasmine
-  - Assetz East Point
-  - Assetz Marq
-  - Goyal Orchid Lakeview
-  - Prestige Sunnyside
-  - Divyasree 77 East
-  - SJR Parkway Homes
-  - Salarpuria Sattva
-  - Umiya City / Velocity
-  - Panathur Gated Societies
-- **Score Badges & Popups**: Custom score markers indicating listing quality. Interactive popups provide rent, two-way peak commute duration, author info, society metadata, one-click WhatsApp links, and direct Facebook post URLs.
-- **Responsive 3-Way Switching**: Seamlessly toggle between Card Grid View, High-Density Table View, and Geospatial Map View across desktop and mobile screens.
+### 2.1 Streamlined Post Browsing & 2-Way View Switching
+- **Responsive 2-Way Switching**: Seamlessly toggle between Card Grid View and High-Density Table View across desktop and mobile screens.
+- **Direct Action Outreach**: One-click WhatsApp message initiation, direct phone calling links, and instant navigation to original Facebook posts.
+- **Score Badges & Modal Breakdown**: Real-time score badges categorizing deals (Unicorn, Great, Moderate, Low) with detailed point-by-point scoring modal inspection.
 
 ### 2.2 Cross-Group Deduplication & Recency Filtering
 - **Multi-Signal Duplicate Detection**:

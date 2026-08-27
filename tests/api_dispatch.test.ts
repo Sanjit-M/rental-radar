@@ -126,4 +126,106 @@ describe('Vercel Edge Scrape Trigger - GitHub Actions Dispatch', () => {
     expect(body.status).toBe('error');
     expect(body.message).toContain('Network connection timeout');
   });
+
+  describe('Scrape Status Polling Endpoint', () => {
+    it('returns idle when GITHUB_DISPATCH_TOKEN is not configured', async () => {
+      delete process.env.GITHUB_DISPATCH_TOKEN;
+      delete process.env.GITHUB_TOKEN;
+
+      const response = await edgeHandler(new Request('http://localhost/api/scrape/status'));
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.status).toBe('idle');
+      expect(json.conclusion).toBeNull();
+    });
+
+    it('returns workflow status when GitHub Actions run is in_progress', async () => {
+      process.env.GITHUB_DISPATCH_TOKEN = 'ghp_test_token';
+
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            workflow_runs: [
+              {
+                id: 12345678,
+                status: 'in_progress',
+                conclusion: null,
+                html_url: 'https://github.com/Sanjit-M/rental-radar/actions/runs/12345678',
+                created_at: '2026-08-27T06:00:00Z',
+                updated_at: '2026-08-27T06:01:00Z',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+
+      const response = await edgeHandler(new Request('http://localhost/api/scrape/status'));
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.status).toBe('in_progress');
+      expect(json.conclusion).toBeNull();
+      expect(json.runId).toBe(12345678);
+    });
+
+    it('returns workflow status when GitHub Actions run has completed successfully', async () => {
+      process.env.GITHUB_DISPATCH_TOKEN = 'ghp_test_token';
+
+      globalThis.fetch = vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            workflow_runs: [
+              {
+                id: 12345678,
+                status: 'completed',
+                conclusion: 'success',
+                html_url: 'https://github.com/Sanjit-M/rental-radar/actions/runs/12345678',
+                created_at: '2026-08-27T06:00:00Z',
+                updated_at: '2026-08-27T06:01:30Z',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+
+      const response = await edgeHandler(new Request('http://localhost/api/scrape/status'));
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.status).toBe('completed');
+      expect(json.conclusion).toBe('success');
+      expect(json.runId).toBe(12345678);
+    });
+
+    it('supports route parity for both /scrape/status and /api/scrape/status', async () => {
+      process.env.GITHUB_DISPATCH_TOKEN = 'ghp_test_token';
+
+      globalThis.fetch = vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              workflow_runs: [
+                {
+                  id: 999,
+                  status: 'completed',
+                  conclusion: 'success',
+                },
+              ],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        )
+      );
+
+      const res1 = await edgeHandler(new Request('http://localhost/scrape/status'));
+      const res2 = await edgeHandler(new Request('http://localhost/api/scrape/status'));
+
+      expect(res1.status).toBe(200);
+      expect(res2.status).toBe(200);
+      const json1 = await res1.json();
+      const json2 = await res2.json();
+      expect(json1.status).toBe('completed');
+      expect(json2.status).toBe('completed');
+    });
+  });
 });

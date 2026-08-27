@@ -90,6 +90,24 @@ export async function fetchFacebookViaApify(
         }
       }
 
+      let imageUrls: string[] = [];
+      if (Array.isArray(item.images)) {
+        for (const img of item.images) {
+          if (typeof img === 'string') imageUrls.push(img);
+          else if (img?.url) imageUrls.push(img.url);
+          else if (img?.link) imageUrls.push(img.link);
+        }
+      }
+      if (Array.isArray(item.media)) {
+        for (const m of item.media) {
+          if (typeof m === 'string') imageUrls.push(m);
+          else if (m?.url) imageUrls.push(m.url);
+          else if (m?.thumbnail) imageUrls.push(m.thumbnail);
+        }
+      }
+      if (item.imageUrl) imageUrls.push(item.imageUrl);
+      if (item.image) imageUrls.push(item.image);
+
       posts.push({
         postId,
         postUrl,
@@ -97,6 +115,7 @@ export async function fetchFacebookViaApify(
         postedTime,
         rawText,
         groupName: item.groupName || 'Facebook Group',
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
       });
     }
   } catch (err: any) {
