@@ -86,7 +86,11 @@ export const TARGET_FB_SOURCES = [
   },
   {
     name: 'Flats Without Brokers Bangalore',
-    url: 'https://www.facebook.com/groups/flatswithoutbrokerbangalore/?sorting_setting=CHRONOLOGICAL',
+    url: 'https://www.facebook.com/groups/flatswithoutbrokersbangalore/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Kadubeesanahalli / Bellandur',
+    url: 'https://www.facebook.com/groups/1265072124774804/?sorting_setting=CHRONOLOGICAL',
   },
   {
     name: 'Flats and Flatmates Kadubeesanahalli',
