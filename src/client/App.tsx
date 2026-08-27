@@ -623,7 +623,7 @@ export const App: React.FC = () => {
                   <textarea
                     value={ingestText}
                     onChange={(e) => setIngestText(e.target.value)}
-                    placeholder="e.g. 1 Room available in 3BHK flat in Sobha Iris, Kadubeesanahalli near Cessna. Rent ₹22,000, deposit ₹45,000. Attached washroom, swimming pool, power backup. Contact: 9845012345"
+                    placeholder="e.g. 1 Room available in 3BHK flat in Kadubeesanahalli near Cessna. Rent ₹22,000, deposit ₹45,000. Attached washroom, swimming pool, power backup. Contact: 9845012345"
                     rows={5}
                     className="w-full bg-slate-900 border border-slate-700/80 rounded-xl p-3 text-slate-200 focus:outline-none focus:border-cyan-500 font-sans leading-relaxed"
                   />
