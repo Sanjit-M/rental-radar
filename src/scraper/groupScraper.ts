@@ -27,24 +27,28 @@ export const TARGET_FB_SOURCES = [
     url: 'https://www.facebook.com/search/posts/?q=PTP%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
+    name: 'Search: PTP Back Gate Flat',
+    url: 'https://www.facebook.com/search/posts/?q=PTP%20Back%20Gate%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
     name: 'Search: PTP Flatmate Male',
     url: 'https://www.facebook.com/search/posts/?q=PTP%20flatmate%20male&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
-    name: 'Search: Kadubeesanahalli Room',
-    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20room&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
-  {
-    name: 'Search: Sobha Iris Rent',
-    url: 'https://www.facebook.com/search/posts/?q=Sobha%20Iris%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
-  {
-    name: 'Search: Assetz East Point Rent',
-    url: 'https://www.facebook.com/search/posts/?q=Assetz%20East%20Point%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
-  {
     name: 'Search: Cessna Business Park Flatmate',
     url: 'https://www.facebook.com/search/posts/?q=Cessna%20Business%20Park%20flatmate&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Cessna Park Flat for Rent',
+    url: 'https://www.facebook.com/search/posts/?q=Cessna%20Park%20flat%20for%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Devarabisanahalli Flat Rent',
+    url: 'https://www.facebook.com/search/posts/?q=Devarabisanahalli%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Devarabisanahalli 1BHK',
+    url: 'https://www.facebook.com/search/posts/?q=Devarabisanahalli%201BHK&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
     name: 'Search: Boganahalli Flat Rent',
@@ -55,24 +59,20 @@ export const TARGET_FB_SOURCES = [
     url: 'https://www.facebook.com/search/posts/?q=Bhoganahalli%20flat%20PTP&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
+    name: 'Search: Panathur Near PTP Flat',
+    url: 'https://www.facebook.com/search/posts/?q=Panathur%20near%20PTP%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
     name: 'Search: Panathur PTP Flatmate',
     url: 'https://www.facebook.com/search/posts/?q=Panathur%20PTP%20flatmate&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
-    name: 'Search: Kadubeesanahalli 2BHK Rent',
-    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%202BHK%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+    name: 'Search: Marathahalli Near PTP Flat Rent',
+    url: 'https://www.facebook.com/search/posts/?q=Marathahalli%20near%20PTP%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
-    name: 'Search: Kadubeesanahalli 1BHK Rent',
-    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%201BHK%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
-  {
-    name: 'Search: Prestige Tech Park 1 Room',
-    url: 'https://www.facebook.com/search/posts/?q=Prestige%20Tech%20Park%201%20room&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
-  {
-    name: 'Search: Cessna Park Flat for Rent',
-    url: 'https://www.facebook.com/search/posts/?q=Cessna%20Park%20flat%20for%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+    name: 'Search: Marathahalli 1BHK Rent',
+    url: 'https://www.facebook.com/search/posts/?q=Marathahalli%201BHK%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
 
   // 17-28: Major Active Bangalore Rental Groups (Crawled with graceful login-checkpoint fallback)

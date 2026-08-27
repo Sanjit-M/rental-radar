@@ -133,9 +133,15 @@ export const LOCALITY_COORDS: Record<string, { lat: number; lon: number; isDirec
   'prestige tech park': { lat: 12.9385, lon: 77.6917, isDirect: true },
   'ptp back gate': { lat: 12.9360, lon: 77.6960, isDirect: true },
   cessna: { lat: 12.9368, lon: 77.6910, isDirect: true },
-  'panathur road near ptp': { lat: 12.9350, lon: 77.7000, isDirect: false },
-  'panathur road': { lat: 12.9350, lon: 77.7000, isDirect: false },
+  'cessna business park': { lat: 12.9368, lon: 77.6910, isDirect: true },
+  devarabisanahalli: { lat: 12.9300, lon: 77.6880, isDirect: true },
+  devarabeesanahalli: { lat: 12.9300, lon: 77.6880, isDirect: true },
+  boganahalli: { lat: 12.9310, lon: 77.6970, isDirect: true },
   bhoganahalli: { lat: 12.9310, lon: 77.6970, isDirect: true },
+  panathur: { lat: 12.9350, lon: 77.7000, isDirect: false },
+  'panathur road': { lat: 12.9350, lon: 77.7000, isDirect: false },
+  marathahalli: { lat: 12.9460, lon: 77.6980, isDirect: true },
+  marathalli: { lat: 12.9460, lon: 77.6980, isDirect: true },
 };
 
 export const TARGET_LOCATIONS = [
@@ -147,16 +153,28 @@ export const TARGET_LOCATIONS = [
   'cessna business park',
   'cessna',
   'ptp back gate',
-  'panathur road near ptp',
-  'bhoganahalli near ptp',
-  'kadubeesanahalli bridge',
+  'boganahalli',
+  'bhoganahalli',
+  'devarabisanahalli',
+  'devarabeesanahalli',
+  'devarabisana halli',
+  'panathur',
+  'panathur road',
+  'marathahalli',
+  'marathalli',
+];
+
+export const UNDERPASS_BLOCKED_PATTERNS = [
+  /after\s+(?:the\s+)?(?:railway\s+)?underpass/i,
+  /beyond\s+(?:the\s+)?(?:railway\s+)?underpass/i,
+  /past\s+(?:the\s+)?(?:railway\s+)?underpass/i,
+  /after\s+(?:the\s+)?railway\s+(?:gate|bridge|track|crossing)/i,
+  /beyond\s+(?:the\s+)?railway\s+(?:gate|bridge|track|crossing)/i,
+  /\bbalagere\b/i,
+  /\bvarthur\b/i,
 ];
 
 export const EXCLUDED_LOCATIONS = [
-  'bellandur',
-  'bellandoor',
-  'marathahalli',
-  'marathalli',
   'green glen layout',
   'green glen',
   'kariyammana agrahara',

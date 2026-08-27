@@ -3,15 +3,22 @@ import { isValidLocation, isValidGender, isValidBHK, passesAllFilters } from '..
 import { parseFacebookTimestamp, formatToIST } from '../src/domain/parser/cleaner';
 
 describe('Location & Post Filter Rules (Correct-by-Construction)', () => {
-  it('strictly excludes Bellandur, Marathahalli, Green Glen, Kariyammana Agrahara', () => {
-    expect(isValidLocation('1 BHK in Bellandur near ecospace')._tag).toBe('err');
-    expect(isValidLocation('Room in Marathahalli bridge')._tag).toBe('err');
+  it('strictly excludes distant locations (Whitefield, HSR, Electronic City, Green Glen)', () => {
+    expect(isValidLocation('1 BHK in Whitefield near ITPL')._tag).toBe('err');
+    expect(isValidLocation('Room in HSR layout sector 2')._tag).toBe('err');
     expect(isValidLocation('Flat in Green Glen Layout')._tag).toBe('err');
-    expect(isValidLocation('Single room in Kariyammana Agrahara')._tag).toBe('err');
+    expect(isValidLocation('Single room in Electronic City phase 1')._tag).toBe('err');
   });
 
-  it('correctly matches Kadubeesanahalli, PTP, and Cessna', () => {
-    const loc1 = isValidLocation('Looking for flatmate in Sobha Iris, Kadubeesanahalli');
+  it('strictly rejects posts located after/beyond the Panathur railway underpass', () => {
+    expect(isValidLocation('1 BHK in Panathur after railway underpass')._tag).toBe('err');
+    expect(isValidLocation('2 BHK in Panathur beyond the underpass near Balagere')._tag).toBe('err');
+    expect(isValidLocation('Flat in Balagere road')._tag).toBe('err');
+    expect(isValidLocation('Room after railway gate panathur')._tag).toBe('err');
+  });
+
+  it('correctly matches the 8 target areas (Kadubeesanahalli, PTP, Cessna, Devarabisanahalli, Boganahalli, Panathur, Marathahalli)', () => {
+    const loc1 = isValidLocation('1 BHK for rent in Kadubeesanahalli');
     expect(loc1._tag).toBe('ok');
     if (loc1._tag === 'ok') expect(loc1.value).toBe('Kadubeesanahalli');
 
@@ -23,6 +30,30 @@ describe('Location & Post Filter Rules (Correct-by-Construction)', () => {
 
     const loc4 = isValidLocation('Panathur road near PTP');
     expect(loc4._tag).toBe('ok');
+
+    const loc5 = isValidLocation('1 BHK in Devarabisanahalli near Cessna');
+    expect(loc5._tag).toBe('ok');
+
+    const loc6 = isValidLocation('Flat in Boganahalli near PTP');
+    expect(loc6._tag).toBe('ok');
+
+    const loc7 = isValidLocation('2 BHK in Marathahalli near PTP bridge');
+    expect(loc7._tag).toBe('ok');
+  });
+
+  it('allows Kadubeesanahalli, Panathur, and PTP posts that mention Bellandur or Marathahalli as transit/proximity references', () => {
+    const post1 = '1 BHK in Kadubeesanahalli, 5 mins from Bellandur EcoSpace and Marathahalli bridge';
+    const loc1 = isValidLocation(post1);
+    expect(loc1._tag).toBe('ok');
+    if (loc1._tag === 'ok') expect(loc1.value).toBe('Kadubeesanahalli');
+
+    const post2 = 'Looking for flatmate in Panathur near PTP. Easy commute to Bellandur & Marathahalli';
+    const res2 = passesAllFilters(post2);
+    expect(res2._tag).toBe('ok');
+    if (res2._tag === 'ok') {
+      expect(['Panathur', 'Ptp']).toContain(res2.value.location);
+      expect(res2.value.bhkType).toBe('Private Room / Flatmate');
+    }
   });
 
   it('filters out female-only/girls-only posts and allows male or ungendered', () => {
@@ -50,7 +81,7 @@ describe('Location & Post Filter Rules (Correct-by-Construction)', () => {
   });
 
   it('runs complete filter pipeline returning Result monad', () => {
-    const validPost = 'Looking for Male flatmate in Sobha Iris, Kadubeesanahalli. Master bedroom in 3 BHK.';
+    const validPost = 'Looking for Male flatmate in Kadubeesanahalli. Master bedroom in 3 BHK.';
     const result = passesAllFilters(validPost);
     expect(result._tag).toBe('ok');
     if (result._tag === 'ok') {
@@ -58,31 +89,12 @@ describe('Location & Post Filter Rules (Correct-by-Construction)', () => {
       expect(result.value.bhkType).toBe('3 BHK (Shared/Full)');
     }
 
-    const excludedPost = 'Female flatmate wanted in Bellandur near ecospace';
+    const excludedPost = 'Female flatmate wanted in Whitefield near ITPL';
     const resultExcluded = passesAllFilters(excludedPost);
     expect(resultExcluded._tag).toBe('err');
     if (resultExcluded._tag === 'err') {
       expect(resultExcluded.error._tag).toBe('FilterRejectionError');
     }
-  });
-
-  it('allows Kadubeesanahalli and PTP posts that mention nearby hubs as transit/proximity references', () => {
-    const post1 = '1 BHK in Kadubeesanahalli, 5 mins from Bellandur EcoSpace and Marathahalli bridge';
-    const loc1 = isValidLocation(post1);
-    expect(loc1._tag).toBe('ok');
-    if (loc1._tag === 'ok') expect(loc1.value).toBe('Kadubeesanahalli');
-
-    const post2 = 'Looking for flatmate in Sobha Iris, Kadubeesanahalli. Easy commute to Marathahalli & Sarjapur';
-    const res2 = passesAllFilters(post2);
-    expect(res2._tag).toBe('ok');
-    if (res2._tag === 'ok') {
-      expect(res2.value.location).toBe('Kadubeesanahalli');
-      expect(res2.value.bhkType).toBe('Private Room / Flatmate');
-    }
-
-    const post3 = 'Flat in Bellandur, close to Kadubeesanahalli';
-    const res3 = passesAllFilters(post3);
-    expect(res3._tag).toBe('err');
   });
 });
 
