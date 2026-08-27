@@ -71,7 +71,7 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
     for (const excl of EXCLUDED_LOCATIONS) {
       const explicitExclLocationPattern = new RegExp(`\\b(?:flat|room|apartment|house|stay|located)\\s+(?:in|at)\\s+${escapeRegExp(excl)}\\b`, 'i');
       if (explicitExclLocationPattern.test(textLower)) {
-        const hasDirectTarget = /\b(?:in|at|near|opposite)\s+(?:kadubeesanahalli|ptp|prestige tech park|cessna|boganahalli|bhoganahalli|devarabisanahalli)\b/i.test(textLower);
+        const hasDirectTarget = /\b(?:in|at|near|opposite)\s+(?:kadubeesanahalli|ptp|prestige tech park|cessna|boganahalli|bhoganahalli|devarabisanahalli|kariyammana agrahara|kariyammana|marathahalli|marathalli)\b/i.test(textLower);
         if (!hasDirectTarget) {
           return err(new FilterRejectionError(`Excluded location: ${excl}`, text.slice(0, 100)));
         }
@@ -92,7 +92,7 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
     }
   }
 
-  return err(new FilterRejectionError('No target location match in Kadubeesanahalli / PTP / Cessna / Devarabisanahalli / Boganahalli perimeter', text.slice(0, 100)));
+  return err(new FilterRejectionError('No target location match in Kadubeesanahalli / PTP / Cessna / Devarabisanahalli / Boganahalli / Kariyammana Agrahara / Marathahalli perimeter', text.slice(0, 100)));
 }
 
 /**

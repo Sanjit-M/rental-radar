@@ -229,6 +229,8 @@ export const LOCALITY_COORDS: Record<string, { lat: number; lon: number; isDirec
   bhoganahalli: { lat: 12.9310, lon: 77.6970, isDirect: true },
   'kaveriappa layout': { lat: 12.9365, lon: 77.6930, isDirect: true },
   'silver county': { lat: 12.9250, lon: 77.6850, isDirect: true },
+  'kariyammana agrahara': { lat: 12.9345, lon: 77.6950, isDirect: true },
+  kariyammana: { lat: 12.9345, lon: 77.6950, isDirect: true },
   panathur: { lat: 12.9350, lon: 77.7000, isDirect: false },
   'panathur road': { lat: 12.9350, lon: 77.7000, isDirect: false },
   marathahalli: { lat: 12.9460, lon: 77.6980, isDirect: true },
@@ -249,6 +251,10 @@ export const TARGET_LOCATIONS = [
   'devarabisana halli',
   'boganahalli',
   'bhoganahalli',
+  'kariyammana agrahara',
+  'kariyammana',
+  'marathahalli',
+  'marathalli',
 ];
 
 export const UNDERPASS_BLOCKED_PATTERNS = [
@@ -268,11 +274,8 @@ export const EXCLUDED_LOCATIONS = [
   'orr',
   'kaveriappa',
   'green glen',
-  'kariyammana agrahara',
   'yemalur',
   'yamalur',
-  'marathahalli',
-  'marathalli',
   'kammagondanahalli',
   'sarjapur',
   'hsr',

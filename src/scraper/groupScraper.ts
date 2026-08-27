@@ -80,6 +80,22 @@ export const TARGET_FB_SOURCES = [
     name: 'Search: Bhoganahalli Flat PTP',
     url: 'https://www.facebook.com/search/posts/?q=Bhoganahalli%20flat%20PTP&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
+  {
+    name: 'Search: Kariyammana Agrahara Flat Rent',
+    url: 'https://www.facebook.com/search/posts/?q=Kariyammana%20Agrahara%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Kariyammana Agrahara 1BHK 2BHK',
+    url: 'https://www.facebook.com/search/posts/?q=Kariyammana%20Agrahara%201BHK%202BHK&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Marathahalli Near PTP Flat Rent',
+    url: 'https://www.facebook.com/search/posts/?q=Marathahalli%20near%20PTP%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Marathahalli 1BHK Rent PTP',
+    url: 'https://www.facebook.com/search/posts/?q=Marathahalli%201BHK%20rent%20PTP&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
 
   // Active Core Groups
   {
@@ -343,10 +359,12 @@ async function scrapeSourceWorker(
           }
         }
 
-        // Extract photo attachments
+        // Extract photo attachments (up to 10 property images, excluding profile avatars & icons)
         const imageUrls: string[] = [];
+        const seenImgSrcs = new Set<string>();
         try {
-          const imgEls = await el.$$('img');
+          // Extract from all image elements within the post element
+          const imgEls = await el.$$('img, [role="img"] img, div[class*="scaledImageFit"] img, a[href*="/photo"] img');
           for (const img of imgEls) {
             const src = await img.getAttribute('src');
             if (
@@ -354,9 +372,17 @@ async function scrapeSourceWorker(
               (src.includes('fbcdn') || src.includes('scontent') || src.startsWith('http')) &&
               !src.includes('emoji') &&
               !src.includes('rsrc.php') &&
-              !src.includes('static.xx')
+              !src.includes('static.xx') &&
+              !src.includes('/p48x48/') &&
+              !src.includes('/p50x50/') &&
+              !src.includes('/s100x100/') &&
+              !src.includes('/s150x150/') &&
+              !src.includes('/p160x160/')
             ) {
-              imageUrls.push(src);
+              if (!seenImgSrcs.has(src) && imageUrls.length < 10) {
+                seenImgSrcs.add(src);
+                imageUrls.push(src);
+              }
             }
           }
         } catch {
