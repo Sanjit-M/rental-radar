@@ -54,19 +54,22 @@ scrapeRouter.post('/parse-single', async (c) => {
     const authorName = body.authorName || 'Manual Ingestion';
     const groupName = body.groupName || 'Manual Submission';
     const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
+    const bypassFilters = Boolean(body.bypassFilters);
 
     if (!rawText || rawText.trim().length < 15) {
       return c.json({ success: false, error: 'Text too short (must be at least 15 characters)' }, 400);
     }
 
     const clean = cleanPostText(rawText);
-    const filterResult = passesAllFilters(clean);
-    if (filterResult._tag === 'err') {
-      return c.json({
-        success: false,
-        filtered: true,
-        reason: filterResult.error.message,
-      }, 200);
+    if (!bypassFilters) {
+      const filterResult = passesAllFilters(clean);
+      if (filterResult._tag === 'err') {
+        return c.json({
+          success: false,
+          filtered: true,
+          reason: filterResult.error.message,
+        }, 200);
+      }
     }
 
     const listing = await processPost(
@@ -78,7 +81,8 @@ scrapeRouter.post('/parse-single', async (c) => {
       new Date().toISOString(),
       undefined,
       'new',
-      imageUrls
+      imageUrls,
+      bypassFilters
     );
 
     if (!listing) {

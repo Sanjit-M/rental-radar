@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
+  AlertCircle,
   Loader2,
   PlusCircle,
   X,
@@ -39,7 +40,7 @@ export const App: React.FC = () => {
   const [ingestUrl, setIngestUrl] = useState('');
   const [ingestImages, setIngestImages] = useState('');
   const [ingestLoading, setIngestLoading] = useState(false);
-  const [ingestResult, setIngestResult] = useState<{ success: boolean; message: string; listing?: any } | null>(null);
+  const [ingestResult, setIngestResult] = useState<{ success: boolean; message: string; filtered?: boolean; listing?: any } | null>(null);
 
   // Pagination Controls
   const [page, setPage] = useState(1);
@@ -194,7 +195,7 @@ export const App: React.FC = () => {
     }, 3500);
   };
 
-  const handleQuickIngest = async () => {
+  const handleQuickIngest = async (bypassFilters: boolean = false) => {
     if (!ingestText.trim() || ingestLoading) return;
     setIngestLoading(true);
     setIngestResult(null);
@@ -207,7 +208,8 @@ export const App: React.FC = () => {
     const res = await api.parseSinglePost(
       ingestText.trim(),
       ingestUrl.trim() || undefined,
-      imageUrlsList.length > 0 ? imageUrlsList : undefined
+      imageUrlsList.length > 0 ? imageUrlsList : undefined,
+      bypassFilters
     );
 
     setIngestLoading(false);
@@ -220,19 +222,25 @@ export const App: React.FC = () => {
     if (data.filtered) {
       setIngestResult({
         success: false,
+        filtered: true,
         message: `Filter Rejection: ${data.reason || 'Post did not match location/criteria'}`,
       });
       return;
     }
 
     if (data.success && data.listing) {
+      const newListing = data.listing;
       setIngestResult({
         success: true,
-        message: `✨ Ingested & Ranked! Score: ${data.listing.score} pts (${data.listing.tier})`,
-        listing: data.listing,
+        message: `✨ Ingested & Ranked! Score: ${newListing.score} pts (${newListing.tier})`,
+        listing: newListing,
       });
-      // Refresh feed
-      fetchListings(1, false, limit);
+      // Prepend immediately to top of feed so it appears right away
+      setListings((prev) => [newListing, ...prev.filter((l) => l.fbPostId !== newListing.fbPostId && l.id !== newListing.id)]);
+      setTotalCount((prev) => prev + 1);
+      setIngestText('');
+      setIngestUrl('');
+      setIngestImages('');
       fetchStats();
     } else {
       setIngestResult({
@@ -659,20 +667,31 @@ export const App: React.FC = () => {
               {/* Feedback Banner */}
               {ingestResult && (
                 <div
-                  className={`p-3.5 rounded-xl text-xs flex items-center justify-between border ${
+                  className={`p-3.5 rounded-xl text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border ${
                     ingestResult.success
                       ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-                      : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
+                      : 'bg-amber-950/40 border-amber-500/40 text-amber-300'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     {ingestResult.success ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                     ) : (
-                      <X className="w-4 h-4 text-rose-400 shrink-0" />
+                      <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                     )}
                     <span>{ingestResult.message}</span>
                   </div>
+
+                  {!ingestResult.success && ingestResult.filtered && (
+                    <button
+                      type="button"
+                      onClick={() => handleQuickIngest(true)}
+                      disabled={ingestLoading}
+                      className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] shrink-0 transition-colors shadow"
+                    >
+                      ⚡ Force Ingest Anyway
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -688,7 +707,7 @@ export const App: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={handleQuickIngest}
+                  onClick={() => handleQuickIngest(false)}
                   disabled={!ingestText.trim() || ingestLoading}
                   className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >

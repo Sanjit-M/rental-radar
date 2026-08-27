@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { createClient } from '@libsql/client/web';
 import { PTP_COORDINATES, SCORING_CONFIG, TARGET_LOCATIONS } from '../src/domain/config';
 import { deduplicateListings } from '../src/domain/parser/deduplicator';
-import { passesAllFilters } from '../src/domain/parser/filter';
+import { passesAllFilters, isValidLocation, isValidBHK } from '../src/domain/parser/filter';
 import { extractAllEntities } from '../src/domain/parser/extractor';
 import { calculatePeakScooterCommute } from '../src/domain/commute/router';
 import { computeListingScore } from '../src/domain/scorer/ratingEngine';
@@ -567,22 +567,34 @@ const parseSingleHandler = async (c: any) => {
     const authorName = body.authorName || 'Manual Ingestion';
     const groupName = body.groupName || 'Manual Submission';
     const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
+    const bypassFilters = Boolean(body.bypassFilters);
 
     if (!rawText || rawText.trim().length < 15) {
       return c.json({ success: false, error: 'Text too short (must be at least 15 characters)' }, 400);
     }
 
     const clean = cleanPostText(rawText);
-    const filterResult = passesAllFilters(clean);
-    if (filterResult._tag === 'err') {
-      return c.json({
-        success: false,
-        filtered: true,
-        reason: filterResult.error.message,
-      }, 200);
+    let location = 'Kadubeesanahalli';
+    let bhkType: BHKType = '2 BHK (Shared/Full)';
+
+    if (!bypassFilters) {
+      const filterResult = passesAllFilters(clean);
+      if (filterResult._tag === 'err') {
+        return c.json({
+          success: false,
+          filtered: true,
+          reason: filterResult.error.message,
+        }, 200);
+      }
+      location = filterResult.value.location;
+      bhkType = filterResult.value.bhkType;
+    } else {
+      const locMatch = isValidLocation(clean);
+      if (locMatch._tag === 'ok') location = locMatch.value;
+      const bhkMatch = isValidBHK(clean);
+      if (bhkMatch._tag === 'ok') bhkType = bhkMatch.value;
     }
 
-    const { location, bhkType } = filterResult.value;
     const entities = extractAllEntities(clean, imageUrls);
     const commute = calculatePeakScooterCommute(
       entities.societyLat,
@@ -675,23 +687,36 @@ const parseSingleHandler = async (c: any) => {
       ],
     });
 
+    const selectRes = await client.execute({
+      sql: 'SELECT * FROM listings WHERE fb_post_id = ? LIMIT 1',
+      args: [fbPostId],
+    });
+    const fullListing = selectRes.rows.length > 0 ? mapRow(selectRes.rows[0]) : null;
+
     return c.json({
       success: true,
-      listing: {
+      listing: fullListing || {
+        id: 0,
         fbPostId,
+        groupName,
+        postUrl,
+        authorName,
+        postedTime: 'Just now',
+        rawText: clean,
         location,
-        societyName: entities.societyName,
-        landmark: entities.landmark,
+        landmark: entities.landmark || undefined,
         title,
         summary,
-        imageUrls: imagesToSave,
+        imageUrls: imagesToSave.length > 0 ? imagesToSave : undefined,
         bhkType,
-        rent: entities.rent,
-        deposit: entities.deposit,
-        score,
-        tier,
-        commute,
         entities,
+        commute,
+        score,
+        scoreBreakdown: breakdown,
+        tier,
+        userStatus: 'new',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       },
     });
   } catch (err: any) {

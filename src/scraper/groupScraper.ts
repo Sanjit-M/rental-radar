@@ -1,11 +1,11 @@
-import { passesAllFilters } from '../domain/parser/filter';
+import { passesAllFilters, isValidLocation, isValidBHK } from '../domain/parser/filter';
 import { extractAllEntities } from '../domain/parser/extractor';
 import { calculatePeakScooterCommute } from '../domain/commute/router';
 import { computeListingScore } from '../domain/scorer/ratingEngine';
 import { cleanPostText, generatePostId, parseFacebookTimestamp, extractAuthorFromText } from '../domain/parser/cleaner';
 import { listingRepository } from '../db/repository';
 import { hasExistingSession, createPersistentContext, enableFastNetworkInterception } from './browserSession';
-import { RentalListing, FbPostId, UserListingStatus } from '../domain/types';
+import { RentalListing, FbPostId, UserListingStatus, BHKType } from '../domain/types';
 import { scrapePublicTelegramChannels } from './telegramScraper';
 import { fetchFacebookViaApify } from './apifyFacebookScraper';
 
@@ -130,17 +130,28 @@ export async function processPost(
   createdAtISO?: string,
   fbPostIdOverride?: FbPostId,
   initialStatus: UserListingStatus = 'new',
-  imageUrls?: string[]
+  imageUrls?: string[],
+  bypassFilters: boolean = false
 ): Promise<RentalListing | null> {
   const clean = cleanPostText(rawText);
 
+  let location = 'Kadubeesanahalli';
+  let bhkType: BHKType = '2 BHK (Shared/Full)';
+
   // 1. Filter Validation via Result monad
   const filterResult = passesAllFilters(clean);
-  if (filterResult._tag === 'err') {
+  if (filterResult._tag === 'ok') {
+    location = filterResult.value.location;
+    bhkType = filterResult.value.bhkType;
+  } else if (!bypassFilters) {
     return null;
+  } else {
+    // Best-effort fallback when bypassing filters
+    const locMatch = isValidLocation(clean);
+    if (locMatch._tag === 'ok') location = locMatch.value;
+    const bhkMatch = isValidBHK(clean);
+    if (bhkMatch._tag === 'ok') bhkType = bhkMatch.value;
   }
-
-  const { location, bhkType } = filterResult.value;
 
   // 2. Entity Extraction with image attachments
   const entities = extractAllEntities(clean, imageUrls);

@@ -210,13 +210,14 @@ export const api = {
   async parseSinglePost(
     text: string,
     postUrl?: string,
-    imageUrls?: string[]
+    imageUrls?: string[],
+    bypassFilters?: boolean
   ): Promise<Result<{ success: boolean; listing?: RentalListing; filtered?: boolean; reason?: string; error?: string }, ApiError>> {
     try {
       const res = await fetch(`${API_BASE}/scrape/parse-single`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ text, postUrl, imageUrls }),
+        body: JSON.stringify({ text, postUrl, imageUrls, bypassFilters }),
       });
       const checked = await classifyResponse(res, 'parseSinglePost');
       if (checked._tag === 'err') return checked;
