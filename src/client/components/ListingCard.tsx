@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RentalListing, UserListingStatus } from '../../domain/types';
 import { RatingBadge } from './RatingBadge';
 import { CommutePill } from './CommutePill';
@@ -15,6 +15,10 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2,
+  X,
   Leaf,
 } from 'lucide-react';
 
@@ -31,8 +35,38 @@ export const ListingCard: React.FC<ListingCardProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+
   const e = listing.entities;
   const images = listing.imageUrls || e.imageUrls || [];
+
+  // Keyboard navigation for full-screen lightbox
+  useEffect(() => {
+    if (!isLightboxOpen) return;
+
+    const handleKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        setIsLightboxOpen(false);
+      } else if (ev.key === 'ArrowLeft') {
+        setActiveImageIdx((prev) => (prev > 0 ? prev - 1 : images.length - 1));
+      } else if (ev.key === 'ArrowRight') {
+        setActiveImageIdx((prev) => (prev < images.length - 1 ? prev + 1 : 0));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLightboxOpen, images.length]);
+
+  const handlePrevImage = (ev: React.MouseEvent) => {
+    ev.stopPropagation();
+    setActiveImageIdx((prev) => (prev > 0 ? prev - 1 : images.length - 1));
+  };
+
+  const handleNextImage = (ev: React.MouseEvent) => {
+    ev.stopPropagation();
+    setActiveImageIdx((prev) => (prev < images.length - 1 ? prev + 1 : 0));
+  };
 
   const getStatusColor = (status: UserListingStatus) => {
     switch (status) {
@@ -50,63 +84,113 @@ export const ListingCard: React.FC<ListingCardProps> = ({
   };
 
   return (
-    <div className="glass-panel glass-panel-hover p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group">
-      {/* Top Banner & Badges */}
-      <div>
-        {/* Photo Gallery Banner if Images Available */}
-        {images.length > 0 && (
-          <div className="relative mb-4 rounded-xl overflow-hidden bg-slate-900 aspect-video border border-slate-800 shadow-inner group/img">
-            <img
-              src={images[activeImageIdx]}
-              alt={e.societyName || listing.location}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105"
-              loading="lazy"
-              onError={(ev) => {
-                (ev.target as HTMLElement).style.display = 'none';
-              }}
-            />
-            {images.length > 1 && (
-              <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-slate-950/80 backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-300 border border-slate-700">
-                <span>{activeImageIdx + 1}/{images.length}</span>
-                <div className="flex gap-1 ml-1">
-                  {images.map((_, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setActiveImageIdx(idx)}
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        idx === activeImageIdx ? 'bg-emerald-400' : 'bg-slate-600'
-                      }`}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+    <>
+      <div className="glass-panel glass-panel-hover p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group">
+        {/* Top Banner & Badges */}
+        <div>
+          {/* Photo Gallery Banner if Images Available */}
+          {images.length > 0 && (
+            <div className="relative mb-4 rounded-xl overflow-hidden bg-slate-900 aspect-video border border-slate-800 shadow-inner group/img">
+              <img
+                src={images[activeImageIdx]}
+                alt={e.societyName || listing.location}
+                className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105 cursor-pointer"
+                loading="lazy"
+                onClick={() => setIsLightboxOpen(true)}
+                onError={(ev) => {
+                  (ev.target as HTMLElement).style.display = 'none';
+                }}
+              />
 
-        {/* Author & Post Time Header */}
-        <div className="flex items-center justify-between text-xs text-slate-400 pb-2.5 mb-3 border-b border-slate-800/60">
-          <div className="flex items-center gap-1.5 font-medium text-slate-300 truncate max-w-[170px]">
-            <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            <span className="truncate">{listing.authorName}</span>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {listing.postCount && listing.postCount > 1 && (
-              <span
-                className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded-full"
-                title={`Seen in ${listing.postCount} groups: ${(listing.groupNames || []).join(', ')}`}
+              {/* Expand / Lightbox Trigger Button */}
+              <button
+                type="button"
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  setIsLightboxOpen(true);
+                }}
+                className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/10 opacity-0 group-hover/img:opacity-100 transition-opacity z-10"
+                title="View full screen photo"
               >
-                <Layers className="w-2.5 h-2.5" /> Seen in {listing.postCount} groups
-              </span>
-            )}
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
 
-            <div className="flex items-center gap-1 text-[11px] text-slate-400 bg-slate-900/80 px-2 py-0.5 rounded-full border border-slate-800 shrink-0">
-              <Clock className="w-3 h-3 text-cyan-400" />
-              <span>{listing.postedTime}</span>
+              {/* Left/Right Carousel Arrow Overlay Buttons */}
+              {images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevImage}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/70 hover:bg-black/90 text-white backdrop-blur-md border border-white/20 shadow-lg hover:scale-110 active:scale-95 transition-all z-10"
+                    title="Previous photo"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleNextImage}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/70 hover:bg-black/90 text-white backdrop-blur-md border border-white/20 shadow-lg hover:scale-110 active:scale-95 transition-all z-10"
+                    title="Next photo"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+
+                  {/* Dot & Counter Bar */}
+                  <div className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-slate-950/85 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[10px] font-mono text-slate-300 border border-slate-700 z-10 shadow-md">
+                    <span>
+                      {activeImageIdx + 1}/{images.length}
+                    </span>
+                    <div className="flex gap-1 ml-1">
+                      {images.map((_, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            setActiveImageIdx(idx);
+                          }}
+                          className={`w-1.5 h-1.5 rounded-full transition-all ${
+                            idx === activeImageIdx
+                              ? 'bg-emerald-400 w-3'
+                              : 'bg-slate-600 hover:bg-slate-400'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Author & Facebook Publication Time Header */}
+          <div className="flex items-center justify-between text-xs text-slate-400 pb-2.5 mb-3 border-b border-slate-800/60">
+            <div className="flex items-center gap-1.5 font-medium text-slate-300 truncate max-w-[160px]">
+              <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span className="truncate">{listing.authorName}</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {listing.postCount && listing.postCount > 1 && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded-full"
+                  title={`Seen in ${listing.postCount} groups: ${(listing.groupNames || []).join(', ')}`}
+                >
+                  <Layers className="w-2.5 h-2.5" /> Seen in {listing.postCount} groups
+                </span>
+              )}
+
+              {/* Exact Facebook Publication Timestamp */}
+              <div
+                className="flex items-center gap-1 text-[11px] font-medium text-cyan-300 bg-slate-900/90 px-2.5 py-0.5 rounded-full border border-cyan-500/30 shrink-0"
+                title={`Published on Facebook: ${listing.postedTime}`}
+              >
+                <Clock className="w-3 h-3 text-cyan-400 shrink-0" />
+                <span>{listing.postedTime}</span>
+              </div>
             </div>
           </div>
-        </div>
 
         <div className="flex items-start justify-between gap-3 mb-3">
           <div>
@@ -208,7 +292,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
           )}
         </div>
 
-        {/* Expandable Post Description */}
+        {/* Full Expandable Facebook Post Body */}
         <div className="mb-4">
           <div
             role="button"
@@ -221,9 +305,9 @@ export const ListingCard: React.FC<ListingCardProps> = ({
                 setIsExpanded(!isExpanded);
               }
             }}
-            className="cursor-pointer group/desc bg-slate-900/60 hover:bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 rounded-xl p-3 transition-colors focus:outline-none focus:border-cyan-500/50"
+            className="cursor-pointer group/desc bg-slate-900/80 hover:bg-slate-900 border border-slate-800/90 hover:border-slate-700 rounded-xl p-3.5 transition-all focus:outline-none focus:border-cyan-500/50 shadow-inner"
           >
-            <p className={`text-xs text-slate-300 italic ${!isExpanded ? 'line-clamp-2' : ''} leading-relaxed`}>
+            <p className={`text-xs text-slate-300 italic ${!isExpanded ? 'line-clamp-2' : ''} leading-relaxed whitespace-pre-line`}>
               "{listing.rawText}"
             </p>
             <div className="flex items-center gap-1 text-[11px] text-cyan-400 font-semibold mt-2 pt-1 border-t border-slate-800/40">
@@ -303,5 +387,94 @@ export const ListingCard: React.FC<ListingCardProps> = ({
         </div>
       </div>
     </div>
-  );
+
+    {/* Full Screen Photo Lightbox Modal */}
+    {isLightboxOpen && images.length > 0 && (
+      <div
+        className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-4"
+        onClick={() => setIsLightboxOpen(false)}
+      >
+        {/* Lightbox Top Bar */}
+        <div className="absolute top-4 left-4 right-4 flex items-center justify-between text-white z-20">
+          <div className="text-sm font-semibold flex items-center gap-2">
+            <span>{e.societyName || listing.location}</span>
+            <span className="text-slate-400 font-mono text-xs">
+              ({activeImageIdx + 1} of {images.length})
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsLightboxOpen(false)}
+            className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-white transition-colors"
+            title="Close (Esc)"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Lightbox Main Image */}
+        <div
+          className="relative max-w-5xl max-h-[85vh] flex items-center justify-center"
+          onClick={(ev) => ev.stopPropagation()}
+        >
+          <img
+            src={images[activeImageIdx]}
+            alt={e.societyName || listing.location}
+            className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-slate-800"
+          />
+
+          {/* Left/Right Lightbox Arrows */}
+          {images.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={handlePrevImage}
+                className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 shadow-2xl transition-all"
+                title="Previous image (←)"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNextImage}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 shadow-2xl transition-all"
+                title="Next image (→)"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Lightbox Bottom Thumbnail Strip */}
+        {images.length > 1 && (
+          <div
+            className="absolute bottom-4 flex items-center gap-2 p-2 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 max-w-md overflow-x-auto"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            {images.map((imgUrl, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setActiveImageIdx(idx)}
+                className={`w-12 h-12 rounded-lg overflow-hidden shrink-0 border-2 transition-all ${
+                  idx === activeImageIdx
+                    ? 'border-emerald-400 scale-105'
+                    : 'border-transparent opacity-60 hover:opacity-100'
+                }`}
+              >
+                <img
+                  src={imgUrl}
+                  alt={`Thumbnail ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+  </>
+);
 };

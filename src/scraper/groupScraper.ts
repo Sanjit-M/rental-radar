@@ -9,9 +9,21 @@ import { RentalListing, FbPostId, UserListingStatus } from '../domain/types';
 import { scrapePublicTelegramChannels } from './telegramScraper';
 import { fetchFacebookViaApify } from './apifyFacebookScraper';
 
-/** Target Facebook Group and Recent Chronological Search Sources to monitor. */
+/** Target Facebook Group and Recent Chronological Search Sources strictly for core perimeter. */
 export const TARGET_FB_SOURCES = [
-  // 1-16: High-Yield Chronological Public Search Feeds (No Group Wall Friction)
+  // Core Chronological Search Feeds across the 5 target localities
+  {
+    name: 'Search: Kadubeesanahalli 1BHK',
+    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%201BHK&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Kadubeesanahalli 2BHK',
+    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%202BHK&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Kadubeesanahalli 3BHK',
+    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%203BHK&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
   {
     name: 'Search: Kadubeesanahalli Flat Rent',
     url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
@@ -21,20 +33,28 @@ export const TARGET_FB_SOURCES = [
     url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20flatmate&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
+    name: 'Search: Kadubeesanahalli Bachelor Flat',
+    url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%20bachelor%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
     name: 'Search: Prestige Tech Park Flat',
     url: 'https://www.facebook.com/search/posts/?q=Prestige%20Tech%20Park%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
-    name: 'Search: PTP Flat',
-    url: 'https://www.facebook.com/search/posts/?q=PTP%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+    name: 'Search: Prestige Tech Park 1BHK 2BHK',
+    url: 'https://www.facebook.com/search/posts/?q=Prestige%20Tech%20Park%201BHK%202BHK&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: Prestige Tech Park Flatmate',
+    url: 'https://www.facebook.com/search/posts/?q=Prestige%20Tech%20Park%20flatmate&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+  },
+  {
+    name: 'Search: PTP Flat Rent',
+    url: 'https://www.facebook.com/search/posts/?q=PTP%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
     name: 'Search: PTP Back Gate Flat',
     url: 'https://www.facebook.com/search/posts/?q=PTP%20Back%20Gate%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
-  {
-    name: 'Search: PTP Flatmate Male',
-    url: 'https://www.facebook.com/search/posts/?q=PTP%20flatmate%20male&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
     name: 'Search: Cessna Business Park Flatmate',
@@ -49,8 +69,8 @@ export const TARGET_FB_SOURCES = [
     url: 'https://www.facebook.com/search/posts/?q=Devarabisanahalli%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
-    name: 'Search: Devarabisanahalli 1BHK',
-    url: 'https://www.facebook.com/search/posts/?q=Devarabisanahalli%201BHK&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
+    name: 'Search: Devarabisanahalli 1BHK 2BHK',
+    url: 'https://www.facebook.com/search/posts/?q=Devarabisanahalli%201BHK%202BHK&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
   {
     name: 'Search: Boganahalli Flat Rent',
@@ -60,75 +80,23 @@ export const TARGET_FB_SOURCES = [
     name: 'Search: Bhoganahalli Flat PTP',
     url: 'https://www.facebook.com/search/posts/?q=Bhoganahalli%20flat%20PTP&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
-  {
-    name: 'Search: Panathur Near PTP Flat',
-    url: 'https://www.facebook.com/search/posts/?q=Panathur%20near%20PTP%20flat&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
-  {
-    name: 'Search: Panathur PTP Flatmate',
-    url: 'https://www.facebook.com/search/posts/?q=Panathur%20PTP%20flatmate&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
-  {
-    name: 'Search: Marathahalli Near PTP Flat Rent',
-    url: 'https://www.facebook.com/search/posts/?q=Marathahalli%20near%20PTP%20flat%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
-  {
-    name: 'Search: Marathahalli 1BHK Rent',
-    url: 'https://www.facebook.com/search/posts/?q=Marathahalli%201BHK%20rent&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
-  },
 
-  // 17-28: Major Active Bangalore Rental Groups (Crawled with graceful login-checkpoint fallback)
+  // Active Core Groups
+  {
+    name: 'Flats and Flatmates Kadubeesanahalli / PTP',
+    url: 'https://www.facebook.com/groups/1265072124774804/?sorting_setting=CHRONOLOGICAL',
+  },
   {
     name: 'Flat and Flatmates Bangalore',
     url: 'https://www.facebook.com/groups/flatandflatmatesbangalore/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'Bangalore Flatmates',
-    url: 'https://www.facebook.com/groups/bangaloreflatmates/?sorting_setting=CHRONOLOGICAL',
   },
   {
     name: 'Flats Without Brokers Bangalore',
     url: 'https://www.facebook.com/groups/flatswithoutbrokersbangalore/?sorting_setting=CHRONOLOGICAL',
   },
   {
-    name: 'Flats and Flatmates Kadubeesanahalli / Bellandur',
-    url: 'https://www.facebook.com/groups/1265072124774804/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'Flats and Flatmates Kadubeesanahalli',
-    url: 'https://www.facebook.com/groups/kadubeesanahalliflats/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'Flatmates Bangalore East',
-    url: 'https://www.facebook.com/groups/flatmatesbangaloreeast/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'Bangalore Rentals Without Broker',
-    url: 'https://www.facebook.com/groups/bangalorerentalswithoutbroker/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'Bangalore Flats and Flatmates',
-    url: 'https://www.facebook.com/groups/bangaloreflatsflatmates/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'ORR Bangalore Rentals',
-    url: 'https://www.facebook.com/groups/orrbangalorerentals/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'Marathahalli Bellandur Rentals',
-    url: 'https://www.facebook.com/groups/marathahallibellandurrentals/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'Bangalore Bachelor Flats',
-    url: 'https://www.facebook.com/groups/bangalorebachelorflats/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'Prestige Tech Park Rentals',
-    url: 'https://www.facebook.com/groups/prestigetechparkrentals/?sorting_setting=CHRONOLOGICAL',
-  },
-  {
-    name: 'Flats and Flatmates Bellandur / Kadubeesanahalli',
-    url: 'https://www.facebook.com/groups/flatsandflatmatesbellandurkadubeesanahalli/?sorting_setting=CHRONOLOGICAL',
+    name: 'Bangalore Flatmates',
+    url: 'https://www.facebook.com/groups/bangaloreflatmates/?sorting_setting=CHRONOLOGICAL',
   },
 ];
 export const TARGET_FB_GROUPS = TARGET_FB_SOURCES;
@@ -234,21 +202,29 @@ async function scrapeSourceWorker(
       // Ignore
     }
 
-    // Scroll 3 times smoothly to load virtualized feed content
-    for (let i = 0; i < 3; i++) {
-      await page.mouse.wheel(0, 1200);
-      await page.waitForTimeout(1000);
-    }
+    // Scroll 12 times smoothly to load deep virtualized feed content (covering 7-10 days)
+    for (let i = 0; i < 12; i++) {
+      await page.mouse.wheel(0, 1400);
+      await page.waitForTimeout(900);
 
-    // Expand "See more" text buttons
-    try {
-      const seeMoreButtons = await page.$$('div[role="button"]:has-text("See more"), span:has-text("See more")');
-      for (const btn of seeMoreButtons.slice(0, 10)) {
+      // Expand visible "See more" text buttons on every 3rd scroll
+      if (i % 3 === 0) {
         try {
-          await btn.click({ timeout: 400 });
+          const seeMoreButtons = await page.$$('div[role="button"]:has-text("See more"), span:has-text("See more")');
+          for (const btn of seeMoreButtons.slice(0, 8)) {
+            await btn.click({ timeout: 300 }).catch(() => {});
+          }
         } catch {
           // Ignore
         }
+      }
+    }
+
+    // Final pass to expand remaining "See more" buttons
+    try {
+      const seeMoreButtons = await page.$$('div[role="button"]:has-text("See more"), span:has-text("See more")');
+      for (const btn of seeMoreButtons.slice(0, 15)) {
+        await btn.click({ timeout: 300 }).catch(() => {});
       }
     } catch {
       // Ignore
