@@ -225,12 +225,19 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
         await page.goto(source.url, { waitUntil: 'domcontentloaded', timeout: 25000 });
         await page.waitForTimeout(3000 + Math.random() * 2000);
 
-        // Detect if redirected to login page or checkpoint
+        // Detect if redirected to dedicated login page or checkpoint
         const currentUrl = page.url();
-        const pageTitle = await page.title();
-        if (currentUrl.includes('login') || currentUrl.includes('checkpoint') || pageTitle.toLowerCase().includes('log in')) {
+        if (currentUrl.includes('/login.php') || currentUrl.includes('/checkpoint/')) {
           console.warn(`⚠️ Facebook session invalid or login required when accessing ${source.name}.`);
           continue;
+        }
+
+        // Dismiss any login or cookie modal overlay if present
+        try {
+          const closeBtn = await page.$('div[aria-label="Close"], [aria-label="Decline optional cookies"], [aria-label="Allow all cookies"]');
+          if (closeBtn) await closeBtn.click({ timeout: 1000 });
+        } catch {
+          // Ignore
         }
 
         // Scroll gently 3 times to load dynamic feed content
