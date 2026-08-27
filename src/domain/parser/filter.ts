@@ -71,7 +71,7 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
     for (const excl of EXCLUDED_LOCATIONS) {
       const explicitExclLocationPattern = new RegExp(`\\b(?:flat|room|apartment|house|stay|located)\\s+(?:in|at)\\s+${escapeRegExp(excl)}\\b`, 'i');
       if (explicitExclLocationPattern.test(textLower)) {
-        const hasDirectTarget = /\b(?:in|at|near|opposite)\s+(?:kadubeesanahalli|ptp|prestige tech park|cessna|boganahalli|bhoganahalli|devarabisanahalli|kariyammana agrahara|kariyammana|marathahalli|marathalli)\b/i.test(textLower);
+        const hasDirectTarget = /\b(?:in|at|near|opposite)\s+(?:kadubeesanahalli|kadubisanahalli|kadhubesanahalli|kadubeesanhalli|kadubisanahali|kadubeesanahali|ptp|prestige tech park|cessna|cessna park|boganahalli|bhoganahalli|boganahali|bhoganahali|devarabisanahalli|devarabeesanahalli|devarabeesanhalli|devarabisanahali|kariyammana agrahara|kariyammana|kariyamma agrahara|marathahalli|marathalli|marathahali|marathali)\b/i.test(textLower);
         if (!hasDirectTarget) {
           return err(new FilterRejectionError(`Excluded location: ${excl}`, text.slice(0, 100)));
         }
@@ -105,23 +105,26 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
 export function isValidGender(text: string): boolean {
   const textLower = text.toLowerCase();
 
-  const femalePatterns = [
-    /\b(?:only\s+)?female(?:s)?(?:\s+only)?\b/i,
-    /\b(?:only\s+)?girl(?:s)?(?:\s+only)?\b/i,
-    /\blooking for (?:a )?female\b/i,
-    /\blooking for (?:a )?girl\b/i,
-    /\bfemale flatmate\b/i,
-    /\bgirl flatmate\b/i,
-    /\bfor female\b/i,
-    /\bfor girl\b/i,
-    /\bwomen only\b/i,
+  // Explicit male / co-ed / any-gender inclusion overrides
+  if (
+    /\b(?:male|boy|boys|men|gentleman|gents|bachelor|bachelors|any\s*gender|co-ed|both\s+(?:male|genders?)|boys?\s*(?:and|or|\/)\s*girls?|male\s*(?:and|or|\/)\s*female|all\s+welcome|no\s+restriction)\b/i.test(textLower)
+  ) {
+    return true;
+  }
+
+  const femaleOnlyPatterns = [
+    /\b(?:female|woman|women|girl|girls)\s+(?:only|flatmate|roommate|replacement|occupancy|tenant)\b/i,
+    /\blooking\s+for\s+(?:a\s+)?(?:female|girl|woman)\b/i,
+    /\bonly\s+for\s+(?:female|girls?|women)\b/i,
+    /\b(?:only\s+female|only\s+girls?|only\s+women)\b/i,
+    /\bfor\s+(?:female|girl|women)\s+only\b/i,
+    /\bwomen\s+only\b/i,
+    /\bgirls?\s+only\b/i,
+    /\bfemale\s+only\b/i,
   ];
 
-  for (const pattern of femalePatterns) {
+  for (const pattern of femaleOnlyPatterns) {
     if (pattern.test(textLower)) {
-      if (/\b(?:male|female|any)\s+(?:or|\/)\s+(?:male|female|any)\b/i.test(textLower)) {
-        return true;
-      }
       return false;
     }
   }
@@ -146,11 +149,15 @@ export function isValidBHK(text: string): Result<BHKType, FilterRejectionError> 
     return ok('2 BHK (Shared/Full)');
   }
 
-  if (/\b(?:1\s*bhk|1\s*rk|studio|single\s*room|private\s*room|1\s*bedroom)\b/i.test(textLower)) {
+  if (/\b(?:1\s*bhk|1\s*rk|studio|single\s*room|private\s*room|1\s*bedroom|independent\s+flat|independent\s+house)\b/i.test(textLower)) {
     return ok('1 BHK');
   }
 
-  if (/\b(?:flatmate|roommate|occupancy|pre-occupied|preoccupied)\b/i.test(textLower)) {
+  if (
+    /\b(?:flatmate|roommate|occupancy|pre-occupied|preoccupied|room\s+available|room\s+for\s+rent|furnished\s+room|spacious\s+room|independent\s+room|single\s+occupancy|sharing\s+room)\b/i.test(
+      textLower
+    )
+  ) {
     return ok('Private Room / Flatmate');
   }
 

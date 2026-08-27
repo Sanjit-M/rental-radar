@@ -78,6 +78,35 @@ describe('Location & Post Filter Rules (Correct-by-Construction)', () => {
     const bhk3 = isValidBHK('Single private room in 3 BHK');
     expect(bhk3._tag).toBe('ok');
     if (bhk3._tag === 'ok') expect(bhk3.value).toBe('3 BHK (Shared/Full)');
+
+    const bhkRoom = isValidBHK('1 room available in a flat near PTP');
+    expect(bhkRoom._tag).toBe('ok');
+    if (bhkRoom._tag === 'ok') expect(bhkRoom.value).toBe('Private Room / Flatmate');
+
+    const bhkIndep = isValidBHK('Independent flat available for rent');
+    expect(bhkIndep._tag).toBe('ok');
+    if (bhkIndep._tag === 'ok') expect(bhkIndep.value).toBe('1 BHK');
+  });
+
+  it('matches phonetic transliterations and spelling variants for target localities', () => {
+    expect(isValidLocation('1 BHK in kadubeesanhalli')._tag).toBe('ok');
+    expect(isValidLocation('Room in kadubisanahali')._tag).toBe('ok');
+    expect(isValidLocation('Flat in devarabeesanhalli')._tag).toBe('ok');
+    expect(isValidLocation('1 BHK in boganahali')._tag).toBe('ok');
+    expect(isValidLocation('Flat in kariyamma agrahara')._tag).toBe('ok');
+    expect(isValidLocation('Room in marathahali near PTP')._tag).toBe('ok');
+    expect(isValidLocation('1 BHK in cessna park')._tag).toBe('ok');
+  });
+
+  it('allows co-ed, any-gender, and mixed male/female listings while strictly rejecting female-only', () => {
+    expect(isValidGender('1 BHK flat in Kadubeesanahalli, open for male or female')).toBe(true);
+    expect(isValidGender('Co-ed flat (1 male and 1 female currently living here)')).toBe(true);
+    expect(isValidGender('Bachelors / boys or girls allowed')).toBe(true);
+    expect(isValidGender('Flat available for any gender / all welcome')).toBe(true);
+
+    expect(isValidGender('Female flatmate needed for 2 BHK')).toBe(false);
+    expect(isValidGender('Looking for female replacement')).toBe(false);
+    expect(isValidGender('Girls only accommodation')).toBe(false);
   });
 
   it('runs complete filter pipeline returning Result monad', () => {

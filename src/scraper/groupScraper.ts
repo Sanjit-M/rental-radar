@@ -7,11 +7,10 @@ import { listingRepository } from '../db/repository';
 import { hasExistingSession, createPersistentContext, enableFastNetworkInterception } from './browserSession';
 import { RentalListing, FbPostId, UserListingStatus, BHKType } from '../domain/types';
 import { scrapePublicTelegramChannels } from './telegramScraper';
-import { fetchFacebookViaApify } from './apifyFacebookScraper';
 
 /** Target Facebook Group and Recent Chronological Search Sources strictly for core perimeter. */
 export const TARGET_FB_SOURCES = [
-  // Core Chronological Search Feeds across the 5 target localities
+  // Core Chronological Search Feeds across the target localities
   {
     name: 'Search: Kadubeesanahalli 1BHK',
     url: 'https://www.facebook.com/search/posts/?q=Kadubeesanahalli%201BHK&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
@@ -97,7 +96,107 @@ export const TARGET_FB_SOURCES = [
     url: 'https://www.facebook.com/search/posts/?q=Marathahalli%201BHK%20rent%20PTP&filters=eyJycF9jaHJvbm9fc29ydDoiIntcIm5hbWVcIjpcImNocm9ub3NvcnRcIn0ifQ%3D%3D',
   },
 
-  // Active Core Groups
+  // 25 Active High-Traffic Bangalore Flatmate Facebook Groups (All Chronological)
+  {
+    name: 'Flat and Flatmates Bellandur, Kadubeesanahalli (200k)',
+    url: 'https://www.facebook.com/groups/591413389157630/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flat and Flatmates Bangalore (145k)',
+    url: 'https://www.facebook.com/groups/507116087403813/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Bengaluru (130k)',
+    url: 'https://www.facebook.com/groups/flatsandflatmatesbangaluru/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Find My Room Bangalore (105k)',
+    url: 'https://www.facebook.com/groups/findmyroombangalore/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats Without Brokers Bangalore (100k)',
+    url: 'https://www.facebook.com/groups/697855465840944/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flat and Flatmates Bangalore (94k)',
+    url: 'https://www.facebook.com/groups/329320681157074/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flat and Flatmates Bangalore (86k)',
+    url: 'https://www.facebook.com/groups/1703473933213030/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats Without Brokers Bangalore (72k)',
+    url: 'https://www.facebook.com/groups/876779221120021/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Bangalore (63k)',
+    url: 'https://www.facebook.com/groups/1918733344819133/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Bengaluru (39k)',
+    url: 'https://www.facebook.com/groups/FlatsandFlatmatesBengaluru/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Bangalore Flatmates Community (39k)',
+    url: 'https://www.facebook.com/groups/636932320207695/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flat and Flatmates Bangalore (39k)',
+    url: 'https://www.facebook.com/groups/224322741398603/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Bangalore (35k)',
+    url: 'https://www.facebook.com/groups/184612851933582/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Bangalore Rentals & Flatmates (35k)',
+    url: 'https://www.facebook.com/groups/147988655894011/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Bangalore (33k)',
+    url: 'https://www.facebook.com/groups/434238014108725/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Bangalore Flat Seekers & Offers (32k)',
+    url: 'https://www.facebook.com/groups/1402333569809567/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats Without Broker Bangalore (31k)',
+    url: 'https://www.facebook.com/groups/380069852631811/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Bangalore Flat & Roommates (27k)',
+    url: 'https://www.facebook.com/groups/929554973876448/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flat and Flatmates Bangalore (27k)',
+    url: 'https://www.facebook.com/groups/193688959165052/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Bangalore (24k)',
+    url: 'https://www.facebook.com/groups/513083563341035/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flatmates Bangalore (23k)',
+    url: 'https://www.facebook.com/groups/1110321379331221/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Bangalore Flats & Rooms (23k)',
+    url: 'https://www.facebook.com/groups/867324518317770/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Bangalore (22k)',
+    url: 'https://www.facebook.com/groups/781559679246306/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Bangalore Flatmates Community (21k)',
+    url: 'https://www.facebook.com/groups/650663023927752/?sorting_setting=CHRONOLOGICAL',
+  },
+  {
+    name: 'Flats and Flatmates Bangalore (21k)',
+    url: 'https://www.facebook.com/groups/457653071101288/?sorting_setting=CHRONOLOGICAL',
+  },
   {
     name: 'Flats and Flatmates Kadubeesanahalli / PTP',
     url: 'https://www.facebook.com/groups/1265072124774804/?sorting_setting=CHRONOLOGICAL',
@@ -335,16 +434,21 @@ async function scrapeSourceWorker(
           }
         }
 
-        // Option A Strict Drop: If no verifiable publication timestamp found, reject post
-        if (!postedTimeRaw) continue;
+        // Timestamp handling: Parse if found; fallback to Recently / current date if Facebook obfuscated the DOM element
+        let parsedDate = new Date();
+        let formattedPostedTime = 'Recently';
 
-        const parsedTimestamp = parseFacebookTimestamp(postedTimeRaw);
-        if (!parsedTimestamp) continue;
-
-        // Ingestion-Time 7-Day Cutoff: Drop posts older than 7 days (168 hours)
-        const postAgeMillis = Date.now() - parsedTimestamp.date.getTime();
-        const maxAgeMillis = 7 * 24 * 60 * 60 * 1000;
-        if (postAgeMillis > maxAgeMillis) continue;
+        if (postedTimeRaw) {
+          const parsed = parseFacebookTimestamp(postedTimeRaw);
+          if (parsed) {
+            parsedDate = parsed.date;
+            formattedPostedTime = parsed.formattedIST;
+            // 7-day cutoff for explicitly dated older posts
+            const postAgeMillis = Date.now() - parsedDate.getTime();
+            const maxAgeMillis = 7 * 24 * 60 * 60 * 1000;
+            if (postAgeMillis > maxAgeMillis) continue;
+          }
+        }
 
         // 3. Exact Post Permalink Extraction (Clean tracking params)
         let postUrl = '';
@@ -410,9 +514,9 @@ async function scrapeSourceWorker(
           text,
           source.name,
           authorName,
-          parsedTimestamp.formattedIST,
+          formattedPostedTime,
           effectivePostUrl,
-          parsedTimestamp.date.toISOString(),
+          parsedDate.toISOString(),
           undefined,
           'new',
           imageUrls
@@ -437,8 +541,7 @@ async function scrapeSourceWorker(
 /**
  * Executes a full multi-source rental ingestion cycle:
  * 1. Public Telegram Channels (Zero-Auth, 100% open).
- * 2. Facebook Groups via Apify Indian Residential Proxies (if APIFY_API_TOKEN configured).
- * 3. Local/CI Playwright 4-Worker Concurrent Pool across target Facebook sources.
+ * 2. Local/CI Playwright 4-Worker Concurrent Pool across target Facebook sources.
  *
  * @param headless - Whether to run Chromium headlessly.
  * @returns Scrape summary statistics.
@@ -491,43 +594,7 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
     console.warn('⚠️ [Telegram] Error during Telegram channel ingestion:', err?.message || String(err));
   }
 
-  // Phase 2: Apify Facebook Ingestion via Indian Residential Proxies (if configured)
-  const apifyToken = process.env.APIFY_API_TOKEN;
-  if (apifyToken && apifyToken.trim() !== '') {
-    try {
-      console.log('🌐 [Multi-Source] Ingesting Facebook groups via Apify Indian Residential Proxies...');
-      const apifyPosts = await fetchFacebookViaApify(apifyToken);
-
-      for (const post of apifyPosts) {
-        if (seenUrls.has(post.postUrl)) continue;
-        seenUrls.add(post.postUrl);
-        scannedCount++;
-
-        const matchedListing = await processPost(
-          post.rawText,
-          post.groupName,
-          post.authorName,
-          post.postedTime,
-          post.postUrl,
-          undefined,
-          undefined,
-          'new',
-          post.imageUrls
-        );
-
-        if (matchedListing) {
-          matchedCount++;
-          console.log(
-            `  ✨ [Apify FB Match]: [${matchedListing.score} pts] ${matchedListing.authorName} - ${matchedListing.entities.societyName || matchedListing.location} (${matchedListing.bhkType}) [${matchedListing.postedTime}]`
-          );
-        }
-      }
-    } catch (err: any) {
-      console.warn('⚠️ [Apify] Error during Apify Facebook ingestion:', err?.message || String(err));
-    }
-  }
-
-  // Phase 3: Playwright 4-Worker Concurrent Browser Pool
+  // Phase 2: Playwright 4-Worker Concurrent Browser Pool
   if (hasExistingSession()) {
     try {
       const context = await createPersistentContext(headless);
