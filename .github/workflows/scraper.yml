@@ -1,10 +1,7 @@
 name: Hourly Facebook Rental Scraper
 
 on:
-  schedule:
-    # Runs every hour at minute 0 (e.g. 1:00, 2:00, 3:00 UTC)
-    - cron: '0 * * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab only
 
 jobs:
   scrape-and-sync:
