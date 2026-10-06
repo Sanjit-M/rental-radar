@@ -75,24 +75,33 @@ export async function ingestSeedListings(): Promise<RentalListing[]> {
   const results: RentalListing[] = [];
 
   for (const seed of SEED_LISTINGS_DATA) {
-    try {
-      const listing = await processPost(
-        seed.rawText,
-        seed.groupName,
-        seed.authorName,
-        'Recently',
-        seed.postUrl,
-        undefined,
-        undefined,
-        'new',
-        seed.imageUrls,
-        true
-      );
-      if (listing) {
-        results.push(listing);
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        const listing = await processPost(
+          seed.rawText,
+          seed.groupName,
+          seed.authorName,
+          'Recently',
+          seed.postUrl,
+          undefined,
+          undefined,
+          'new',
+          seed.imageUrls,
+          true
+        );
+        if (listing) {
+          results.push(listing);
+        }
+        break;
+      } catch (err: any) {
+        retries--;
+        if (retries === 0) {
+          console.warn('Failed to ingest seed listing:', err?.message || err);
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
       }
-    } catch {
-      // Continue on individual failures
     }
   }
 

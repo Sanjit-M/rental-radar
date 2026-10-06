@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "server": "tsx src/server/index.ts",
-    "test": "vitest run",
+    "test": "vitest run --fileParallelism=false",
     "test:watch": "vitest",
     "auth": "tsx src/scraper/authSetup.ts",
     "auth:setup": "tsx src/scraper/authSetup.ts",
