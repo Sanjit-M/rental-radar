@@ -18,7 +18,7 @@ export const ListingTable: React.FC<ListingTableProps> = ({
     <div className="glass-panel rounded-2xl overflow-hidden border border-slate-800/80">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
-          <thead className="bg-slate-900/90 text-slate-400 font-semibold border-b border-slate-800">
+          <thead className="bg-slate-900/95 backdrop-blur-md sticky top-0 z-10 text-slate-300 font-semibold border-b border-slate-800">
             <tr>
               <th className="py-3 px-4">Score</th>
               <th className="py-3 px-4">Author / Posted</th>
@@ -107,12 +107,12 @@ export const ListingTable: React.FC<ListingTableProps> = ({
 
                   <td className="py-3 px-4 whitespace-nowrap">
                     {e.isBrokerage ? (
-                      <span className="text-[11px] px-2 py-0.5 rounded bg-rose-950/40 text-rose-300 border border-rose-500/30">
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-950/50 text-rose-300 border border-rose-500/40">
                         Broker Fee
                       </span>
                     ) : (
-                      <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-300 border border-emerald-500/30">
-                        Zero
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-500/50 shadow-sm">
+                        Zero Brokerage
                       </span>
                     )}
                   </td>

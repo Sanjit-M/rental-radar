@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RentalListing, DashboardStats, UserListingStatus, SortBy } from '../domain/types';
 import { FilterBar } from './components/FilterBar';
+import { CorridorFilter } from './components/CorridorFilter';
 import { ListingCard } from './components/ListingCard';
 import { ListingTable } from './components/ListingTable';
 import { ScoreBreakdownModal } from './components/ScoreBreakdownModal';
@@ -49,6 +50,9 @@ export const App: React.FC = () => {
   const [hasMore, setHasMore] = useState(false);
 
   // Filter & View State
+  const [selectedCorridor, setSelectedCorridor] = useState<string>('all');
+  const [zeroBrokerageOnly, setZeroBrokerageOnly] = useState<boolean>(false);
+  const [bachelorFriendlyOnly, setBachelorFriendlyOnly] = useState<boolean>(false);
   const [search, setSearch] = useState('');
   const [minScore, setMinScore] = useState(40);
   const [maxRent, setMaxRent] = useState(45000);
@@ -68,6 +72,8 @@ export const App: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      const querySearch = search.trim() || (selectedCorridor !== 'all' ? selectedCorridor : undefined);
+
       const result = await api.getListings({
         page: targetPage,
         limit: requestedLimit,
@@ -78,7 +84,7 @@ export const App: React.FC = () => {
         ...(furnishing !== 'all' ? { furnishing } : {}),
         ...(userStatus !== 'all' ? { userStatus } : {}),
         ...(recency !== 'all' ? { recency } : {}),
-        ...(search.trim() ? { search: search.trim() } : {}),
+        ...(querySearch ? { search: querySearch } : {}),
       });
 
       if (result._tag === 'err') {
@@ -100,7 +106,7 @@ export const App: React.FC = () => {
       setHasMore(Boolean(data.hasMore));
       setLoading(false);
     },
-    [limit, minScore, maxRent, bhkType, furnishing, userStatus, recency, search, sortBy]
+    [limit, minScore, maxRent, bhkType, furnishing, userStatus, recency, search, sortBy, selectedCorridor]
   );
 
   const fetchStats = useCallback(async () => {
@@ -250,7 +256,20 @@ export const App: React.FC = () => {
     }
   };
 
+  const displayedListings = listings.filter((l) => {
+    if (zeroBrokerageOnly && l.entities.isBrokerage) return false;
+    if (bachelorFriendlyOnly && (l.entities.isFemaleOnly || !l.entities.isMaleBachelorAllowed)) return false;
+    if (selectedCorridor !== 'all' && search.trim()) {
+      const text = `${l.location} ${l.landmark ?? ''} ${l.entities.societyName ?? ''} ${l.rawText}`.toLowerCase();
+      if (!text.includes(selectedCorridor.toLowerCase())) return false;
+    }
+    return true;
+  });
+
   const handleResetFilters = () => {
+    setSelectedCorridor('all');
+    setZeroBrokerageOnly(false);
+    setBachelorFriendlyOnly(false);
     setSearch('');
     setMinScore(40);
     setMaxRent(45000);
@@ -434,6 +453,19 @@ export const App: React.FC = () => {
           </div>
         )}
 
+        {/* Bangalore Tech Corridors Strip */}
+        <CorridorFilter
+          selectedCorridor={selectedCorridor}
+          onSelectCorridor={(id) => {
+            setSelectedCorridor(id);
+            setPage(1);
+          }}
+          zeroBrokerageOnly={zeroBrokerageOnly}
+          onToggleZeroBrokerage={() => setZeroBrokerageOnly((prev) => !prev)}
+          bachelorFriendlyOnly={bachelorFriendlyOnly}
+          onToggleBachelorFriendly={() => setBachelorFriendlyOnly((prev) => !prev)}
+        />
+
         {/* Filter & View Bar */}
         <FilterBar
           search={search}
@@ -472,13 +504,13 @@ export const App: React.FC = () => {
           </div>
         ) : viewMode === 'table' ? (
           <ListingTable
-            listings={listings}
+            listings={displayedListings}
             onStatusChange={handleStatusChange}
             onOpenScoreModal={setSelectedScoreListing}
           />
         ) : (
           <div>
-            {listings.length === 0 && !loading ? (
+            {displayedListings.length === 0 && !loading ? (
               <div className="glass-panel p-12 rounded-3xl text-center space-y-4 border border-slate-800">
                 <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-900 flex items-center justify-center text-slate-500">
                   <Sparkles className="w-6 h-6" />
@@ -496,7 +528,7 @@ export const App: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {listings.map((listing) => (
+                {displayedListings.map((listing) => (
                   <ListingCard
                     key={listing.id}
                     listing={listing}

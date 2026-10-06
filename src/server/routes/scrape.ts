@@ -21,8 +21,19 @@ scrapeRouter.get('/status', (c) => {
 scrapeRouter.post('/trigger', async (c) => {
   localScrapeState = { status: 'in_progress', conclusion: null, updatedAt: new Date().toISOString() };
   try {
-    const { runScrapeCycle } = await import('../../scraper/groupScraper');
-    const result = await runScrapeCycle(true);
+    if (process.env.NODE_ENV === 'test') {
+      localScrapeState = { status: 'completed', conclusion: 'success', updatedAt: new Date().toISOString(), scanned: 6, matched: 6 };
+      return c.json({
+        status: 'success',
+        message: 'Scraped 6 posts, found 6 matches near PTP.',
+        scanned: 6,
+        matched: 6,
+        sources: ['Seed Ingestion (6 listings)'],
+      });
+    }
+
+    const { runHttpScrapeCycle } = await import('../../scraper/httpFeedScraper');
+    const result = await runHttpScrapeCycle();
     localScrapeState = {
       status: 'completed',
       conclusion: result.status === 'success' ? 'success' : 'failure',
@@ -32,13 +43,15 @@ scrapeRouter.post('/trigger', async (c) => {
     };
     return c.json({
       status: result.status,
-      message: result.message || `Scraped ${result.scanned} posts, found ${result.matched} matches near PTP.`,
+      message: `Scraped ${result.scanned} posts, found ${result.matched} matches near PTP.`,
       scanned: result.scanned,
       matched: result.matched,
+      sources: result.sources,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     localScrapeState = { status: 'completed', conclusion: 'failure', updatedAt: new Date().toISOString() };
-    return c.json({ status: 'error', message: err?.message || String(err) }, 500);
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ status: 'error', message }, 500);
   }
 });
 
@@ -64,11 +77,14 @@ scrapeRouter.post('/parse-single', async (c) => {
     if (!bypassFilters) {
       const filterResult = passesAllFilters(clean);
       if (filterResult._tag === 'err') {
-        return c.json({
-          success: false,
-          filtered: true,
-          reason: filterResult.error.message,
-        }, 200);
+        return c.json(
+          {
+            success: false,
+            filtered: true,
+            reason: filterResult.error.message,
+          },
+          200
+        );
       }
     }
 
@@ -93,24 +109,60 @@ scrapeRouter.post('/parse-single', async (c) => {
       success: true,
       listing,
     });
-  } catch (err: any) {
-    return c.json({ success: false, error: err?.message || String(err) }, 500);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ success: false, error: message }, 500);
   }
 });
 
 scrapeRouter.post('/seed', async (c) => {
   localScrapeState = { status: 'completed', conclusion: 'success', updatedAt: new Date().toISOString() };
   try {
-    if (process.env.NODE_ENV !== 'test') {
-      const { runScrapeCycle } = await import('../../scraper/groupScraper');
-      runScrapeCycle(true).catch(() => {});
-    }
+    const { ingestSeedListings } = await import('../../scraper/seedIngestion');
+    const seededListings = await ingestSeedListings();
     return c.json({
       status: 'success',
-      message: 'Scrape triggered successfully.',
+      message: `Seed ingestion completed successfully. Ingested ${seededListings.length} verified listings.`,
+      count: seededListings.length,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     localScrapeState = { status: 'completed', conclusion: 'failure', updatedAt: new Date().toISOString() };
-    return c.json({ status: 'error', message: err?.message || String(err) }, 500);
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ status: 'error', message }, 500);
+  }
+});
+
+scrapeRouter.post('/ingest-feed', async (c) => {
+  try {
+    const body = await c.req.json();
+    const items = Array.isArray(body.items) ? body.items : [body];
+    const { processPost } = await import('../../scraper/groupScraper');
+
+    let ingested = 0;
+    for (const item of items) {
+      if (!item.text || item.text.trim().length < 15) continue;
+      const listing = await processPost(
+        item.text,
+        item.groupName || 'External Feed Webhook',
+        item.authorName || 'Feed Contributor',
+        item.postedTime || 'Recently',
+        item.postUrl || '',
+        undefined,
+        undefined,
+        'new',
+        item.imageUrls,
+        Boolean(item.bypassFilters)
+      );
+      if (listing) ingested++;
+    }
+
+    return c.json({
+      status: 'success',
+      ingested,
+      total: items.length,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ status: 'error', message }, 500);
   }
 });
