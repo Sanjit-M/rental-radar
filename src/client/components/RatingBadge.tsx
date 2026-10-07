@@ -26,7 +26,7 @@ export const RatingBadge: React.FC<RatingBadgeProps> = ({ score, tier, onClick }
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold cursor-pointer transition-all ${badgeStyles} ${glowStyle}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold cursor-pointer transition-[background-color,border-color,box-shadow,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${badgeStyles} ${glowStyle}`}
       title="Click to view point-by-point math audit"
     >
       <span className="text-sm font-bold font-mono">{score}</span>

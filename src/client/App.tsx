@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RentalListing, DashboardStats, UserListingStatus, SortBy } from '../domain/types';
 import { FilterBar } from './components/FilterBar';
-import { CorridorFilter } from './components/CorridorFilter';
+import { CorridorFilter, BANGALORE_CORRIDORS } from './components/CorridorFilter';
 import { ListingCard } from './components/ListingCard';
 import { ListingTable } from './components/ListingTable';
 import { ScoreBreakdownModal } from './components/ScoreBreakdownModal';
+import { CommandPalette } from './components/CommandPalette';
+import { PriceCommuteHistogram } from './components/PriceCommuteHistogram';
+import { ListingDrawer } from './components/ListingDrawer';
+import { ToastStack, toast } from './components/ToastStack';
 import { api } from './services/api';
 import {
   Compass,
@@ -23,8 +27,11 @@ import {
   PlusCircle,
   X,
   Send,
+  Search,
   Image as ImageIcon,
+  Smartphone,
 } from 'lucide-react';
+import { MobilePrototypeHarness } from './prototype/MobilePrototypeHarness';
 
 export const App: React.FC = () => {
   // Listings & Pagination State
@@ -41,7 +48,27 @@ export const App: React.FC = () => {
   const [ingestUrl, setIngestUrl] = useState('');
   const [ingestImages, setIngestImages] = useState('');
   const [ingestLoading, setIngestLoading] = useState(false);
-  const [ingestResult, setIngestResult] = useState<{ success: boolean; message: string; filtered?: boolean; listing?: any } | null>(null);
+  const [ingestResult, setIngestResult] = useState<{
+    readonly success: boolean;
+    readonly message: string;
+    readonly filtered?: boolean | undefined;
+    readonly listing?: RentalListing | undefined;
+  } | null>(null);
+
+  // Learn UI Craft: Command Palette & Listing Drawer State
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [drawerListing, setDrawerListing] = useState<RentalListing | null>(null);
+
+  // Mobile Prototype Mode State (?proto=true, mobile viewport, or manual toggle)
+  const [isPrototypeMode, setIsPrototypeMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('proto') === 'true' || params.get('proto') === '1') return true;
+      if (params.get('proto') === 'false' || params.get('proto') === '0') return false;
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
 
   // Pagination Controls
   const [page, setPage] = useState(1);
@@ -122,14 +149,29 @@ export const App: React.FC = () => {
     fetchStats();
   }, [fetchListings, fetchStats, limit]);
 
+  // Global Keyboard Shortcut: Cmd+K / Ctrl+K opens CommandPalette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const handleStatusChange = async (id: number, status: UserListingStatus) => {
     // Optimistic update
     setListings((prev) =>
       prev.map((l) => (l.id === id ? { ...l, userStatus: status } : l))
     );
+    toast.success(`Pipeline updated: listing marked as ${status}`);
     const result = await api.updateListingStatus(id, status);
     if (result._tag === 'err') {
       console.error('Status update failed:', result.error.message);
+      toast.error(`Failed to update listing: ${result.error.message}`);
       // Revert optimistic update on failure
       fetchListings(page, false, limit);
       return;
@@ -226,6 +268,7 @@ export const App: React.FC = () => {
 
     const data = res.value;
     if (data.filtered) {
+      toast.warning(`Filter Rejection: ${data.reason || 'Post did not match location/criteria'}`);
       setIngestResult({
         success: false,
         filtered: true,
@@ -236,6 +279,7 @@ export const App: React.FC = () => {
 
     if (data.success && data.listing) {
       const newListing = data.listing;
+      toast.success(`✨ Ingested & Ranked! Score: ${newListing.score} pts (${newListing.tier})`);
       setIngestResult({
         success: true,
         message: `✨ Ingested & Ranked! Score: ${newListing.score} pts (${newListing.tier})`,
@@ -249,6 +293,7 @@ export const App: React.FC = () => {
       setIngestImages('');
       fetchStats();
     } else {
+      toast.error(data.error || 'Failed to parse post details');
       setIngestResult({
         success: false,
         message: data.error || 'Failed to parse post details',
@@ -279,6 +324,7 @@ export const App: React.FC = () => {
     setRecency('7d');
     setSortBy('score_desc');
     setLimit(12);
+    toast.info('All filters reset to defaults');
   };
 
   const handleLimitChange = (newLimit: number) => {
@@ -293,6 +339,23 @@ export const App: React.FC = () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+
+  if (isPrototypeMode) {
+    return (
+      <MobilePrototypeHarness
+        listings={listings}
+        onStatusChange={handleStatusChange}
+        onExitPrototype={() => {
+          setIsPrototypeMode(false);
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('proto');
+            window.history.pushState({}, '', url.toString());
+          }
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-emerald-500 selection:text-slate-950">
@@ -320,20 +383,52 @@ export const App: React.FC = () => {
 
           <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap">
             <button
+              type="button"
+              onClick={() => {
+                setIsPrototypeMode(true);
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('proto', 'true');
+                  window.history.pushState({}, '', url.toString());
+                }
+              }}
+              className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-purple-400 border border-purple-500/40 shadow-lg shadow-purple-500/10 transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              title="Open Mobile-Native Prototype Suite"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>📱 Mobile Prototype</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsCommandPaletteOpen(true)}
+              className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 hover:border-emerald-500/50 shadow-lg transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              title="Open Command Palette (Cmd+K / Ctrl+K)"
+            >
+              <Search className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Commands</span>
+              <kbd className="hidden sm:inline px-1.5 py-0.5 text-[10px] font-mono bg-slate-950 text-slate-400 rounded border border-slate-800">
+                ⌘K
+              </kbd>
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 setIsIngestModalOpen(true);
                 setIngestResult(null);
               }}
-              className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-cyan-500/30 shadow-lg shadow-cyan-500/10 transition-all"
+              className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-cyan-500/30 shadow-lg shadow-cyan-500/10 transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
             >
               <PlusCircle className="w-3.5 h-3.5" />
               <span>Test / Ingest Post</span>
             </button>
 
             <button
+              type="button"
               onClick={handleTriggerScrape}
               disabled={scrapePhase === 'running'}
-              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition-all ${
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition-[background-color,box-shadow,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                 scrapePhase === 'completed'
                   ? 'bg-emerald-600 text-white shadow-emerald-500/20'
                   : scrapePhase === 'running'
@@ -453,6 +548,21 @@ export const App: React.FC = () => {
           </div>
         )}
 
+        {/* Interactive Price Histogram & Commute Scrubber */}
+        <PriceCommuteHistogram
+          listings={listings}
+          maxRent={maxRent}
+          onMaxRentChange={(rent) => {
+            setMaxRent(rent);
+            setPage(1);
+          }}
+          selectedCorridor={selectedCorridor}
+          onSelectCorridor={(id) => {
+            setSelectedCorridor(id);
+            setPage(1);
+          }}
+        />
+
         {/* Bangalore Tech Corridors Strip */}
         <CorridorFilter
           selectedCorridor={selectedCorridor}
@@ -507,6 +617,7 @@ export const App: React.FC = () => {
             listings={displayedListings}
             onStatusChange={handleStatusChange}
             onOpenScoreModal={setSelectedScoreListing}
+            onOpenDrawer={(l) => setDrawerListing(l)}
           />
         ) : (
           <div>
@@ -534,6 +645,7 @@ export const App: React.FC = () => {
                     listing={listing}
                     onStatusChange={handleStatusChange}
                     onOpenScoreModal={setSelectedScoreListing}
+                    onOpenDrawer={(l) => setDrawerListing(l)}
                   />
                 ))}
               </div>
@@ -560,9 +672,10 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-1.5 flex-wrap justify-center">
               {/* Previous Button */}
               <button
+                type="button"
                 onClick={() => handlePageChange(page - 1)}
                 disabled={page <= 1 || loading}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] font-semibold"
                 title="Previous Page"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -594,9 +707,10 @@ export const App: React.FC = () => {
                     ) : (
                       <button
                         key={item}
+                        type="button"
                         onClick={() => handlePageChange(item)}
                         disabled={loading}
-                        className={`w-8 h-8 rounded-xl text-xs font-bold font-mono transition-colors ${
+                        className={`w-8 h-8 rounded-xl text-xs font-bold font-mono transition-[background-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                           page === item
                             ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
                             : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700/80'
@@ -610,9 +724,10 @@ export const App: React.FC = () => {
 
               {/* Next Button */}
               <button
+                type="button"
                 onClick={() => handlePageChange(page + 1)}
                 disabled={page >= totalPages || !hasMore || loading}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] font-semibold"
                 title="Next Page"
               >
                 <span>Next</span>
@@ -732,7 +847,7 @@ export const App: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsIngestModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
                 >
                   Close
                 </button>
@@ -741,7 +856,7 @@ export const App: React.FC = () => {
                   type="button"
                   onClick={() => handleQuickIngest(false)}
                   disabled={!ingestText.trim() || ingestLoading}
-                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-[background-color,box-shadow,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
                 >
                   {ingestLoading ? (
                     <>
@@ -759,10 +874,53 @@ export const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Command Palette (Cmd+K / Ctrl+K) */}
+        <CommandPalette
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          corridors={BANGALORE_CORRIDORS}
+          selectedCorridor={selectedCorridor}
+          onSelectCorridor={(id) => {
+            setSelectedCorridor(id);
+            setPage(1);
+          }}
+          bhkType={bhkType}
+          onSelectBhkType={(bhk) => {
+            setBhkType(bhk);
+            setPage(1);
+          }}
+          sortBy={sortBy}
+          onSelectSortBy={(sort) => {
+            setSortBy(sort);
+            setPage(1);
+          }}
+          zeroBrokerageOnly={zeroBrokerageOnly}
+          onToggleZeroBrokerage={() => setZeroBrokerageOnly((prev) => !prev)}
+          bachelorFriendlyOnly={bachelorFriendlyOnly}
+          onToggleBachelorFriendly={() => setBachelorFriendlyOnly((prev) => !prev)}
+          listings={listings}
+          onSelectListing={(listing) => {
+            setDrawerListing(listing);
+          }}
+        />
+
+        {/* Listing Drawer (Slide-Over & Mobile Sheet) */}
+        <ListingDrawer
+          listing={drawerListing}
+          isOpen={Boolean(drawerListing)}
+          onClose={() => setDrawerListing(null)}
+          onStatusChange={handleStatusChange}
+          onOpenScoreModal={(l) => setSelectedScoreListing(l)}
+        />
+
+        {/* Emil Kowalski Sonner-Style Toast Stack */}
+        <ToastStack />
       </div>
     </div>
   );
 };
 
 export default App;
+
 

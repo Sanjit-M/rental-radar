@@ -45,7 +45,7 @@ export const PasscodeModal: React.FC<PasscodeModalProps> = ({ isOpen, onSuccess 
                 }}
                 placeholder="Enter Passcode..."
                 autoFocus
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950/70 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-center tracking-widest font-mono"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-950/70 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-[border-color,box-shadow] duration-140 ease-[var(--ease-out)] text-center tracking-widest font-mono"
               />
             </div>
 
@@ -55,7 +55,7 @@ export const PasscodeModal: React.FC<PasscodeModalProps> = ({ isOpen, onSuccess 
 
             <button
               type="submit"
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-all"
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.97] text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20 transition-[background-color,box-shadow,transform] duration-140 ease-[var(--ease-out)]"
             >
               <Check className="w-4 h-4" />
               Unlock Dashboard

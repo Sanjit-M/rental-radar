@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Emil Kowalski custom motion tokens */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 body {
   margin: 0;
   background-color: #030712;
@@ -9,7 +16,13 @@ body {
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
-/* Custom Glassmorphism styles */
+/* Snappy perceived performance spinner (550ms vs default 1000ms) */
+.animate-spin-snappy,
+.animate-spin {
+  animation: spin 550ms linear infinite !important;
+}
+
+/* Custom Glassmorphism styles - explicit transition properties only */
 .glass-panel {
   background: rgba(17, 24, 39, 0.7);
   backdrop-filter: blur(12px);
@@ -18,13 +31,26 @@ body {
 }
 
 .glass-panel-hover {
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out);
 }
 
 .glass-panel-hover:hover {
   background: rgba(31, 41, 55, 0.8);
   border-color: rgba(34, 197, 94, 0.3);
   box-shadow: 0 10px 30px -10px rgba(34, 197, 94, 0.15);
+}
+
+/* Emil Kowalski interactive press response */
+.interactive-press {
+  transition-property: transform, background-color, border-color, color, box-shadow;
+  transition-duration: 140ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.interactive-press:active {
+  transform: scale(0.97);
 }
 
 /* Custom Scrollbar */

@@ -1,29 +1,29 @@
 import React from 'react';
-import { LayoutGrid, List, Search, RotateCcw, Clock } from 'lucide-react';
+import { LayoutGrid, List, Search, Clock } from 'lucide-react';
 import { SortBy } from '../../domain/types';
 
 interface FilterBarProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  minScore: number;
-  onMinScoreChange: (value: number) => void;
-  maxRent: number;
-  onMaxRentChange: (value: number) => void;
-  bhkType: string;
-  onBhkTypeChange: (value: string) => void;
-  furnishing: string;
-  onFurnishingChange: (value: string) => void;
-  userStatus: string;
-  onUserStatusChange: (value: string) => void;
-  recency: string;
-  onRecencyChange: (value: string) => void;
-  sortBy: SortBy;
-  onSortByChange: (value: SortBy) => void;
-  limit: number;
-  onLimitChange: (limit: number) => void;
-  viewMode: 'grid' | 'table';
-  onViewModeChange: (mode: 'grid' | 'table') => void;
-  onResetFilters: () => void;
+  readonly search: string;
+  readonly onSearchChange: (value: string) => void;
+  readonly minScore: number;
+  readonly onMinScoreChange: (value: number) => void;
+  readonly maxRent: number;
+  readonly onMaxRentChange: (value: number) => void;
+  readonly bhkType: string;
+  readonly onBhkTypeChange: (value: string) => void;
+  readonly furnishing: string;
+  readonly onFurnishingChange: (value: string) => void;
+  readonly userStatus: string;
+  readonly onUserStatusChange: (value: string) => void;
+  readonly recency: string;
+  readonly onRecencyChange: (value: string) => void;
+  readonly sortBy: SortBy;
+  readonly onSortByChange: (value: SortBy) => void;
+  readonly limit: number;
+  readonly onLimitChange: (limit: number) => void;
+  readonly viewMode: 'grid' | 'table';
+  readonly onViewModeChange: (mode: 'grid' | 'table') => void;
+  readonly onResetFilters: () => void;
 }
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -47,7 +47,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onLimitChange,
   viewMode,
   onViewModeChange,
-  onResetFilters,
 }) => {
   return (
     <div className="glass-panel rounded-2xl p-5 mb-6 border border-slate-800 space-y-4 shadow-xl">
@@ -61,7 +60,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             placeholder="Search by locality, keywords, rent, phone..."
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+            className="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
           />
         </div>
 
@@ -72,7 +71,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <select
               value={limit}
               onChange={(e) => onLimitChange(Number(e.target.value))}
-              className="bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer font-medium"
+              className="bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer font-medium transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
             >
               <option value={12}>12 listings</option>
               <option value={24}>24 listings</option>
@@ -86,7 +85,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <select
               value={sortBy}
               onChange={(e) => onSortByChange(e.target.value as SortBy)}
-              className="bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+              className="bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
             >
               <option value="score_desc">Rating Score (High to Low)</option>
               <option value="rent_asc">Rent (Lowest First)</option>
@@ -98,8 +97,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           {/* View Mode Toggle: Grid / Table */}
           <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-700/80">
             <button
+              type="button"
               onClick={() => onViewModeChange('grid')}
-              className={`p-1.5 rounded-lg transition-colors ${
+              className={`p-1.5 rounded-lg transition-[background-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                 viewMode === 'grid'
                   ? 'bg-emerald-500 text-slate-950 font-bold'
                   : 'text-slate-400 hover:text-white'
@@ -109,8 +109,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => onViewModeChange('table')}
-              className={`p-1.5 rounded-lg transition-colors ${
+              className={`p-1.5 rounded-lg transition-[background-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                 viewMode === 'table'
                   ? 'bg-emerald-500 text-slate-950 font-bold'
                   : 'text-slate-400 hover:text-white'
@@ -122,7 +123,6 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           </div>
         </div>
       </div>
-
 
       {/* Filter Rows */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 pt-3 border-t border-slate-800/80 text-xs">
@@ -168,7 +168,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <select
             value={recency}
             onChange={(e) => onRecencyChange(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
           >
             <option value="all">All Time</option>
             <option value="1h">Past 1 Hour</option>
@@ -186,7 +186,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <select
             value={bhkType}
             onChange={(e) => onBhkTypeChange(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
           >
             <option value="all">All BHK Types</option>
             <option value="1 BHK">1 BHK</option>
@@ -202,7 +202,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <select
             value={furnishing}
             onChange={(e) => onFurnishingChange(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
           >
             <option value="all">Any Furnishing</option>
             <option value="Fully Furnished">Fully Furnished</option>
@@ -217,7 +217,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <select
             value={userStatus}
             onChange={(e) => onUserStatusChange(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
+            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
           >
             <option value="all">All Listings</option>
             <option value="new">New</option>

@@ -42,7 +42,7 @@ export const HeaderStats: React.FC<HeaderStatsProps> = ({
             <button
               onClick={onTriggerScrape}
               disabled={isScraping}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm shadow-emerald-900/40 transition-all"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm shadow-emerald-900/40 transition-[background-color,box-shadow,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isScraping ? 'animate-spin' : ''}`} />
               {isScraping ? 'Scraping FB Groups...' : 'Check Groups Now'}

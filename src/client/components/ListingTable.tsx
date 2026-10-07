@@ -1,18 +1,20 @@
 import React from 'react';
 import { RentalListing, UserListingStatus } from '../../domain/types';
 import { RatingBadge } from './RatingBadge';
-import { ExternalLink, MessageCircle, Phone, Building2, Waves, Zap, User, Clock, Layers } from 'lucide-react';
+import { ExternalLink, MessageCircle, Phone, Building2, Waves, Zap, User, Clock, Layers, Eye } from 'lucide-react';
 
 interface ListingTableProps {
   listings: RentalListing[];
   onStatusChange: (id: number, status: UserListingStatus) => void;
   onOpenScoreModal: (listing: RentalListing) => void;
+  onOpenDrawer?: ((listing: RentalListing) => void) | undefined;
 }
 
 export const ListingTable: React.FC<ListingTableProps> = ({
   listings,
   onStatusChange,
   onOpenScoreModal,
+  onOpenDrawer,
 }) => {
   return (
     <div className="glass-panel rounded-2xl overflow-hidden border border-slate-800/80">
@@ -149,6 +151,18 @@ export const ListingTable: React.FC<ListingTableProps> = ({
 
                   <td className="py-3 px-4 whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      {onOpenDrawer && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenDrawer(l)}
+                          className="px-2 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/40 border border-emerald-500/30 flex items-center gap-1 font-semibold text-xs transition-colors"
+                          title="Quick Inspect in Drawer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Inspect</span>
+                        </button>
+                      )}
+
                       {e.contactPhone && (
                         <>
                           <a
@@ -159,14 +173,14 @@ export const ListingTable: React.FC<ListingTableProps> = ({
                             )}%20near%20PTP.`}
                             target="_blank"
                             rel="noreferrer"
-                            className="p-1 rounded bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40"
+                            className="p-1 rounded-lg bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/40 transition-colors"
                             title="WhatsApp"
                           >
                             <MessageCircle className="w-3.5 h-3.5" />
                           </a>
                           <a
                             href={`tel:${e.contactPhone}`}
-                            className="p-1 rounded bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/40"
+                            className="p-1 rounded-lg bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/40 transition-colors"
                             title="Call"
                           >
                             <Phone className="w-3.5 h-3.5" />
@@ -177,10 +191,11 @@ export const ListingTable: React.FC<ListingTableProps> = ({
                         href={l.postUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="p-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"
-                        title="Facebook Post"
+                        className="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border border-blue-500/30 flex items-center gap-1 font-semibold text-xs transition-colors"
+                        title="Open Original Facebook Post"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Post</span>
                       </a>
                     </div>
                   </td>

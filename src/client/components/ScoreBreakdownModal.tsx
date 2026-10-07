@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { RentalListing } from '../../domain/types';
 import { X, CheckCircle2, XCircle } from 'lucide-react';
 
@@ -8,6 +8,79 @@ interface ScoreBreakdownModalProps {
 }
 
 export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listing, onClose }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+
+  // Focus trap, scroll lock, scrollbar width compensation, and focus restoration
+  useEffect(() => {
+    if (!listing) return;
+
+    // Save previously focused element to restore when closed
+    if (document.activeElement instanceof HTMLElement) {
+      previousActiveElementRef.current = document.activeElement;
+    }
+
+    // Measure scrollbar width to prevent layout shift jitter
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+
+    document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    // Auto-focus first focusable element inside modal
+    const focusTimer = setTimeout(() => {
+      const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable && focusable.length > 0) {
+        focusable[0]?.focus();
+      }
+    }, 20);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable || focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first && last) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last && first) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      clearTimeout(focusTimer);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
+      previousActiveElementRef.current?.focus();
+    };
+  }, [listing, onClose]);
+
   if (!listing) return null;
 
   const b = listing.scoreBreakdown;
@@ -67,12 +140,22 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="score-breakdown-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div
+        ref={modalRef}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl"
+      >
         {/* Modal Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <h3 id="score-breakdown-title" className="text-lg font-bold text-white flex items-center gap-2">
               <span>{listing.tier}</span>
               <span className="font-mono text-emerald-400 font-extrabold">{listing.score} pts</span>
             </h3>
@@ -81,8 +164,10 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            title="Close dialog"
           >
             <X className="w-5 h-5" />
           </button>
@@ -131,6 +216,7 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
         <div className="p-4 bg-slate-950/60 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
           <span>Uncapped raw mathematical score</span>
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-colors"
           >

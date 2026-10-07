@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:all": "tsx scripts/dev.ts",
     "build": "tsc && vite build",
     "server": "tsx src/server/index.ts",
     "test": "vitest run --fileParallelism=false",
