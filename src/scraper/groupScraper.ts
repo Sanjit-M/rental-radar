@@ -266,7 +266,16 @@ export async function processPost(
   const { score, breakdown, tier } = computeListingScore(entities, commute);
 
   const fbPostId = fbPostIdOverride || generatePostId(groupName, authorName, clean);
-  const finalPostUrl = postUrl || `https://www.facebook.com/groups/posts/${fbPostId}`;
+  if (
+    !postUrl ||
+    !postUrl.startsWith('https://www.facebook.com/') ||
+    postUrl.includes('fb_') ||
+    postUrl.includes('manual_') ||
+    postUrl.includes('seed_')
+  ) {
+    return null;
+  }
+  const finalPostUrl = postUrl;
   const images = entities.imageUrls || imageUrls || [];
   const title = `${bhkType} in ${entities.societyName || location}`;
   const summary = clean.slice(0, 250);
@@ -449,28 +458,76 @@ async function scrapeSourceWorker(
           }
         }
 
-        // 3. Exact Post Permalink Extraction (Clean tracking params)
+        // 3. Exact Canonical Facebook Post Permalink Extraction
         let postUrl = '';
         const linkEls = await el.$$(
-          'a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid="], a[role="link"]:has(abbr), a[role="link"]:has(span[id*="jsc_c"])'
+          'a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid="], a[href*="multi_permalinks="], a[role="link"]'
         );
         for (const link of linkEls) {
-          const href = await link.getAttribute('href');
-          if (href && (href.includes('/posts/') || href.includes('story_fbid=') || href.includes('/permalink/'))) {
-            try {
-              const absoluteHref = href.startsWith('http') ? href : `https://www.facebook.com${href}`;
-              const urlObj = new URL(absoluteHref);
-              urlObj.searchParams.delete('__cft__[0]');
-              urlObj.searchParams.delete('__tn__');
-              urlObj.searchParams.delete('eid');
-              urlObj.searchParams.delete('rdid');
-              postUrl = urlObj.toString();
-              if (postUrl) break;
-            } catch {
-              postUrl = href.split('?')[0];
-              if (postUrl) break;
+          const rawHref = await link.getAttribute('href');
+          if (!rawHref) continue;
+
+          const href = rawHref.startsWith('http') ? rawHref : `https://www.facebook.com${rawHref}`;
+
+          try {
+            const urlObj = new URL(href);
+            if (!urlObj.hostname.includes('facebook.com')) continue;
+
+            // Priority A: Search results with multi_permalinks query parameter
+            const multiPermalinks = urlObj.searchParams.get('multi_permalinks');
+            if (multiPermalinks && /^\d+$/.test(multiPermalinks)) {
+              const groupMatch = urlObj.pathname.match(/\/groups\/([^\/?#]+)/);
+              if (groupMatch) {
+                postUrl = `https://www.facebook.com/groups/${groupMatch[1]}/posts/${multiPermalinks}/`;
+                break;
+              }
             }
+
+            // Priority B: Direct /groups/<groupId>/posts/<postId>
+            const postsMatch = urlObj.pathname.match(/\/groups\/([^\/?#]+)\/posts\/([^\/?#]+)/);
+            if (postsMatch) {
+              postUrl = `https://www.facebook.com/groups/${postsMatch[1]}/posts/${postsMatch[2]}/`;
+              break;
+            }
+
+            // Priority C: Direct /groups/<groupId>/permalink/<postId>
+            const permalinkMatch = urlObj.pathname.match(/\/groups\/([^\/?#]+)\/permalink\/([^\/?#]+)/);
+            if (permalinkMatch) {
+              postUrl = `https://www.facebook.com/groups/${permalinkMatch[1]}/posts/${permalinkMatch[2]}/`;
+              break;
+            }
+
+            // Priority D: /permalink.php?story_fbid=<postId>&id=<groupId>
+            if (urlObj.pathname.includes('permalink.php') && urlObj.searchParams.has('story_fbid')) {
+              const storyFbid = urlObj.searchParams.get('story_fbid');
+              const id = urlObj.searchParams.get('id');
+              if (storyFbid) {
+                postUrl = id
+                  ? `https://www.facebook.com/permalink.php?story_fbid=${storyFbid}&id=${id}`
+                  : `https://www.facebook.com/permalink.php?story_fbid=${storyFbid}`;
+                break;
+              }
+            }
+
+            // Priority E: Direct user / page posts /<user>/posts/<postId>
+            const userPostMatch = urlObj.pathname.match(/^\/([^\/?#]+)\/posts\/([^\/?#]+)/);
+            if (
+              userPostMatch &&
+              userPostMatch[1] &&
+              userPostMatch[2] &&
+              !['groups', 'events', 'watch', 'marketplace'].includes(userPostMatch[1])
+            ) {
+              postUrl = `https://www.facebook.com/${userPostMatch[1]}/posts/${userPostMatch[2]}/`;
+              break;
+            }
+          } catch {
+            // Ignore URL parsing errors
           }
+        }
+
+        // INVARIANT: Never synthesize fallback URLs. If no authentic Facebook permalink was extracted, strictly drop the post.
+        if (!postUrl || !postUrl.startsWith('https://www.facebook.com/') || postUrl.includes('fb_')) {
+          continue;
         }
 
         // Extract photo attachments (up to 10 property images, excluding profile avatars & icons)
@@ -503,18 +560,16 @@ async function scrapeSourceWorker(
           // Ignore
         }
 
-        const effectivePostUrl = postUrl || `https://www.facebook.com/groups/posts/fb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-
         // Atomic deduplication check
-        if (seenUrls.has(effectivePostUrl)) continue;
-        seenUrls.add(effectivePostUrl);
+        if (seenUrls.has(postUrl)) continue;
+        seenUrls.add(postUrl);
 
         const matchedListing = await processPost(
           text,
           source.name,
           authorName,
           formattedPostedTime,
-          effectivePostUrl,
+          postUrl,
           parsedDate.toISOString(),
           undefined,
           'new',

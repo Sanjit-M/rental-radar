@@ -267,11 +267,16 @@ export const listingRepository = {
   ): Promise<RentalListing> {
     if (
       !listing.postUrl ||
+      !listing.postUrl.startsWith('https://www.facebook.com/') ||
+      listing.postUrl.includes('fb_') ||
       listing.postUrl.includes('seed_') ||
+      listing.postUrl.includes('manual_') ||
       listing.fbPostId.includes('seed') ||
       listing.groupName.toLowerCase().includes('seed')
     ) {
-      throw new Error('Invariant Violation: Synthetic or seed listings are strictly forbidden.');
+      throw new Error(
+        `Invariant Violation: Synthetic, seed, or broken listings are strictly forbidden. Listing must have an authentic Facebook post permalink. Got: ${listing.postUrl}`
+      );
     }
 
     const upsertSql = `

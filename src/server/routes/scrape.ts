@@ -62,11 +62,15 @@ scrapeRouter.post('/parse-single', async (c) => {
     const { passesAllFilters } = await import('../../domain/parser/filter');
 
     const rawText = body.text || '';
-    const postUrl = body.postUrl || `https://www.facebook.com/groups/posts/manual_${Date.now()}`;
-    const authorName = body.authorName || 'Manual Ingestion';
-    const groupName = body.groupName || 'Manual Submission';
+    const postUrl = body.postUrl || '';
+    const authorName = body.authorName || 'Facebook Group Member';
+    const groupName = body.groupName || 'Facebook Group';
     const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
     const bypassFilters = Boolean(body.bypassFilters);
+
+    if (!postUrl || !postUrl.startsWith('https://www.facebook.com/') || postUrl.includes('manual_') || postUrl.includes('fb_') || postUrl.includes('seed_')) {
+      return c.json({ success: false, error: 'A valid Facebook post permalink (https://www.facebook.com/...) is strictly required.' }, 400);
+    }
 
     if (!rawText || rawText.trim().length < 15) {
       return c.json({ success: false, error: 'Text too short (must be at least 15 characters)' }, 400);

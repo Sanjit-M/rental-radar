@@ -1,12 +1,32 @@
+import fs from 'fs';
+import path from 'path';
 import { createClient } from '@libsql/client';
 import { SCHEMA_SQL } from '../db/database';
 import { listingRepository } from '../db/repository';
+
+function loadEnv() {
+  const envPath = path.resolve(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf-8').split('\n');
+    for (const line of lines) {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        const val = match[2] || '';
+        if (key && !process.env[key]) {
+          process.env[key] = val.trim();
+        }
+      }
+    }
+  }
+}
 
 /**
  * Synchronizes real, verified accommodation listings from the local SQLite database
  * directly into the configured Turso Cloud SQLite database.
  */
 export async function syncTurso(): Promise<number> {
+  loadEnv();
   const url = process.env.TURSO_DATABASE_URL;
   const authToken = process.env.TURSO_AUTH_TOKEN;
 
@@ -43,8 +63,10 @@ export async function syncTurso(): Promise<number> {
   for (const l of localListings) {
     if (
       !l.postUrl ||
-      l.postUrl.trim().length === 0 ||
+      !l.postUrl.startsWith('https://www.facebook.com/') ||
+      l.postUrl.includes('fb_') ||
       l.postUrl.includes('seed_') ||
+      l.postUrl.includes('manual_') ||
       l.fbPostId.includes('seed')
     ) {
       continue;
