@@ -6,13 +6,13 @@ import { listingRepository } from '../db/repository';
  * Synchronizes real, verified accommodation listings from the local SQLite database
  * directly into the configured Turso Cloud SQLite database.
  */
-async function syncTurso(): Promise<void> {
+export async function syncTurso(): Promise<number> {
   const url = process.env.TURSO_DATABASE_URL;
   const authToken = process.env.TURSO_AUTH_TOKEN;
 
   if (!url) {
     console.log('ℹ️ No TURSO_DATABASE_URL set; skipping cloud synchronization.');
-    return;
+    return 0;
   }
 
   console.log(`📡 Connecting to Turso Cloud at: ${url.replace(/:\/\/.*@/, '://***@')}`);
@@ -41,15 +41,17 @@ async function syncTurso(): Promise<void> {
   let synced = 0;
 
   for (const l of localListings) {
-    // Strict check: Only sync real listings with direct Facebook post permalinks
-    if (!l.postUrl || (!l.postUrl.includes('/posts/') && !l.postUrl.includes('story_fbid=') && !l.postUrl.includes('/permalink/'))) {
+    if (!l.postUrl || l.postUrl.trim().length === 0) {
       continue;
     }
+
+    const imagesToSave = l.imageUrls || l.entities.imageUrls || [];
 
     const upsertSql = `
       INSERT INTO listings (
         fb_post_id, group_name, post_url, author_name, posted_time, raw_text,
-        location, bhk_type, rent, deposit, is_brokerage,
+        location, landmark, title, summary, image_urls,
+        bhk_type, rent, deposit, is_brokerage,
         is_gated_society, society_name, has_swimming_pool,
         has_power_backup, has_attached_washroom, has_balcony,
         furnishing, is_kadubeesanahalli_direct, contact_phone,
@@ -59,6 +61,7 @@ async function syncTurso(): Promise<void> {
       ) VALUES (
         ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?,
+        ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
@@ -68,6 +71,10 @@ async function syncTurso(): Promise<void> {
       )
       ON CONFLICT(fb_post_id) DO UPDATE SET
         author_name=excluded.author_name,
+        landmark=excluded.landmark,
+        title=excluded.title,
+        summary=excluded.summary,
+        image_urls=excluded.image_urls,
         posted_time=excluded.posted_time,
         rent=excluded.rent,
         deposit=excluded.deposit,
@@ -90,6 +97,10 @@ async function syncTurso(): Promise<void> {
         l.postedTime,
         l.rawText,
         l.location,
+        l.landmark || l.entities.landmark || null,
+        l.title || null,
+        l.summary || null,
+        JSON.stringify(imagesToSave),
         l.bhkType,
         l.entities.rent !== null ? l.entities.rent : null,
         l.entities.deposit !== null ? l.entities.deposit : null,
@@ -122,9 +133,12 @@ async function syncTurso(): Promise<void> {
   const countRes = await client.execute('SELECT COUNT(*) as total FROM listings');
   const total = countRes.rows[0]?.total;
   console.log(`\n✨ Successfully synchronized ${synced} real listings. Total in Turso: ${total}`);
+  return synced;
 }
 
-syncTurso().catch((err: unknown) => {
-  console.error('Fatal sync error:', err);
-  process.exit(1);
-});
+if (process.argv[1] && (process.argv[1].endsWith('syncTurso.ts') || process.argv[1].endsWith('syncTurso.js'))) {
+  syncTurso().catch((err: unknown) => {
+    console.error('Fatal sync error:', err);
+    process.exit(1);
+  });
+}
