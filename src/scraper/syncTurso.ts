@@ -41,7 +41,12 @@ export async function syncTurso(): Promise<number> {
   let synced = 0;
 
   for (const l of localListings) {
-    if (!l.postUrl || l.postUrl.trim().length === 0) {
+    if (
+      !l.postUrl ||
+      l.postUrl.trim().length === 0 ||
+      l.postUrl.includes('seed_') ||
+      l.fbPostId.includes('seed')
+    ) {
       continue;
     }
 

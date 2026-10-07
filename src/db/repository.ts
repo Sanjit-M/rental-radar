@@ -265,6 +265,15 @@ export const listingRepository = {
   async upsertListing(
     listing: Omit<RentalListing, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string | undefined }
   ): Promise<RentalListing> {
+    if (
+      !listing.postUrl ||
+      listing.postUrl.includes('seed_') ||
+      listing.fbPostId.includes('seed') ||
+      listing.groupName.toLowerCase().includes('seed')
+    ) {
+      throw new Error('Invariant Violation: Synthetic or seed listings are strictly forbidden.');
+    }
+
     const upsertSql = `
       INSERT INTO listings (
         fb_post_id, group_name, post_url, author_name, posted_time, raw_text,

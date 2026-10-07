@@ -8,6 +8,7 @@ Rental Radar is an automated rental post aggregator, cross-group deduplicator, a
 
 Rental Radar is structured as a full-stack, edge-compatible application built with TypeScript:
 
+- **Core Invariant (Zero Synthetic Data Policy)**: The database and ingestion pipeline strictly and exclusively process authentic listings scraped from real sources. Synthetic seed listings, mock records, and placeholder datasets are permanently forbidden across all environments (local, CI, and production). Any record violating authentic origin (e.g. `seed_` identifiers) is rejected at the repository boundary.
 - **Backend Edge API**: Hono web framework running on the Vercel Edge Runtime (`api/index.ts`) for sub-15ms serverless responses globally, with parity Node.js server support (`src/server/index.ts`) for local development and scraping automation.
 - **Database Layer**: Dual-mode SQLite and LibSQL client (`@libsql/client`). Supports local embedded storage (`file:data/listings.db`) and Turso Cloud SQLite over HTTPS/WSS.
 - **Frontend Dashboard**: React 18 single-page application bundled with Vite 5 and styled with Tailwind CSS. Includes 2-way view toggling (Card Grid and High-Density Table).
