@@ -6,7 +6,6 @@ import { cleanPostText, generatePostId, parseFacebookTimestamp, extractAuthorFro
 import { listingRepository } from '../db/repository';
 import { hasExistingSession, createPersistentContext, enableFastNetworkInterception } from './browserSession';
 import { RentalListing, FbPostId, UserListingStatus, BHKType } from '../domain/types';
-import { scrapePublicTelegramChannels } from './telegramScraper';
 
 /** Target Facebook Group and Recent Chronological Search Sources strictly for core perimeter. */
 export const TARGET_FB_SOURCES = [
@@ -558,43 +557,9 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
   const startTime = Date.now();
   const seenUrls = new Set<string>();
 
-  console.log('🔄 [Rental Radar] Starting Multi-Source Ingestion Cycle...');
+  console.log('🔄 [Rental Radar] Starting Facebook Ingestion Cycle...');
 
-  // Phase 1: Public Telegram Channels Ingestion
-  try {
-    console.log('📱 [Multi-Source] Scraping open Bangalore Telegram rental channels...');
-    const telegramPosts = await scrapePublicTelegramChannels();
-    console.log(`📱 [Telegram] Retrieved ${telegramPosts.length} recent posts from public channels.`);
-
-    for (const post of telegramPosts) {
-      if (seenUrls.has(post.postUrl)) continue;
-      seenUrls.add(post.postUrl);
-      scannedCount++;
-
-      const matchedListing = await processPost(
-        post.rawText,
-        post.groupName,
-        post.authorName,
-        post.postedTime,
-        post.postUrl,
-        undefined,
-        undefined,
-        'new',
-        post.imageUrls
-      );
-
-      if (matchedListing) {
-        matchedCount++;
-        console.log(
-          `  ✨ [Telegram Match]: [${matchedListing.score} pts] ${matchedListing.authorName} - ${matchedListing.entities.societyName || matchedListing.location} (${matchedListing.bhkType}) [${matchedListing.postedTime}]`
-        );
-      }
-    }
-  } catch (err: any) {
-    console.warn('⚠️ [Telegram] Error during Telegram channel ingestion:', err?.message || String(err));
-  }
-
-  // Phase 2: Playwright 4-Worker Concurrent Browser Pool
+  // Playwright 4-Worker Concurrent Browser Pool
   if (hasExistingSession()) {
     try {
       const context = await createPersistentContext(headless);

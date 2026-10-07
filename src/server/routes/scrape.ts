@@ -32,8 +32,8 @@ scrapeRouter.post('/trigger', async (c) => {
       });
     }
 
-    const { runHttpScrapeCycle } = await import('../../scraper/httpFeedScraper');
-    const result = await runHttpScrapeCycle();
+    const { runScrapeCycle } = await import('../../scraper/groupScraper');
+    const result = await runScrapeCycle(true);
     localScrapeState = {
       status: 'completed',
       conclusion: result.status === 'success' ? 'success' : 'failure',
@@ -46,7 +46,6 @@ scrapeRouter.post('/trigger', async (c) => {
       message: `Scraped ${result.scanned} posts, found ${result.matched} matches near PTP.`,
       scanned: result.scanned,
       matched: result.matched,
-      sources: result.sources,
     });
   } catch (err: unknown) {
     localScrapeState = { status: 'completed', conclusion: 'failure', updatedAt: new Date().toISOString() };
@@ -117,19 +116,11 @@ scrapeRouter.post('/parse-single', async (c) => {
 
 scrapeRouter.post('/seed', async (c) => {
   localScrapeState = { status: 'completed', conclusion: 'success', updatedAt: new Date().toISOString() };
-  try {
-    const { ingestSeedListings } = await import('../../scraper/seedIngestion');
-    const seededListings = await ingestSeedListings();
-    return c.json({
-      status: 'success',
-      message: `Seed ingestion completed successfully. Ingested ${seededListings.length} verified listings.`,
-      count: seededListings.length,
-    });
-  } catch (err: unknown) {
-    localScrapeState = { status: 'completed', conclusion: 'failure', updatedAt: new Date().toISOString() };
-    const message = err instanceof Error ? err.message : String(err);
-    return c.json({ status: 'error', message }, 500);
-  }
+  return c.json({
+    status: 'success',
+    message: 'Synthetic seed ingestion disabled.',
+    count: 0,
+  });
 });
 
 scrapeRouter.post('/ingest-feed', async (c) => {
