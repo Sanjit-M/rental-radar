@@ -129,35 +129,57 @@ export function parseFacebookTimestamp(
     return { date, formattedIST: formatToIST(date) };
   }
 
-  // 2. Minutes: "15m", "15 mins", "15 min", "15 minutes ago"
-  const minMatch = lower.match(/(\d+)\s*(?:m|min|mins|minutes?)(?:\s*ago)?/);
-  if (minMatch && minMatch[1]) {
-    const mins = parseInt(minMatch[1], 10);
-    const date = new Date(now - mins * 60 * 1000);
+  // 2. Explicit Calendar Dates (e.g., "5 July 2025", "28 March 2024 at 11:54 AM", "16 August")
+  // MUST precede single-letter relative matchers ('m', 'h', 'd') to avoid "28 March" matching "28m"
+  const monthNames = [
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december',
+    'jan', 'feb', 'mar', 'apr', 'may', 'jun',
+    'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec'
+  ];
+  const monthPattern = monthNames.join('|');
+
+  // Format A: "16 August", "5 July 2025", "16 August at 11:54"
+  const dateAtTimeRegex = new RegExp(`\\b(\\d{1,2})\\s+(${monthPattern})(?:[\\s,]+(\\d{4}))?(?:\\s+at\\s+(\\d{1,2}):(\\d{2})(?:\\s*(am|pm))?)?\\b`, 'i');
+  const matchA = clean.match(dateAtTimeRegex);
+  if (matchA && matchA[1] && matchA[2]) {
+    const day = parseInt(matchA[1], 10);
+    const monthStr = matchA[2].toLowerCase();
+    const year = matchA[3] ? parseInt(matchA[3], 10) : referenceTime.getFullYear();
+    let hrs = matchA[4] ? parseInt(matchA[4], 10) : 12;
+    const mins = matchA[5] ? parseInt(matchA[5], 10) : 0;
+    const meridiem = matchA[6]?.toLowerCase();
+    if (meridiem === 'pm' && hrs < 12) hrs += 12;
+    if (meridiem === 'am' && hrs === 12) hrs = 0;
+
+    const monthIndex = monthNames.findIndex((m) => monthStr.startsWith(m.slice(0, 3))) % 12;
+    const date = new Date(year, monthIndex, day, hrs, mins, 0, 0);
     return { date, formattedIST: formatToIST(date) };
   }
 
-  // 3. Hours: "2h", "2 hrs", "2 hr", "2 hours ago"
-  const hrMatch = lower.match(/(\d+)\s*(?:h|hr|hrs|hours?)(?:\s*ago)?/);
-  if (hrMatch && hrMatch[1]) {
-    const hrs = parseInt(hrMatch[1], 10);
-    const date = new Date(now - hrs * 60 * 60 * 1000);
+  // Format B: "August 16", "July 5, 2025", "August 16 at 11:54"
+  const monthAtTimeRegex = new RegExp(`\\b(${monthPattern})\\s+(\\d{1,2})(?:[\\s,]+(\\d{4}))?(?:\\s+at\\s+(\\d{1,2}):(\\d{2})(?:\\s*(am|pm))?)?\\b`, 'i');
+  const matchB = clean.match(monthAtTimeRegex);
+  if (matchB && matchB[1] && matchB[2]) {
+    const monthStr = matchB[1].toLowerCase();
+    const day = parseInt(matchB[2], 10);
+    const year = matchB[3] ? parseInt(matchB[3], 10) : referenceTime.getFullYear();
+    let hrs = matchB[4] ? parseInt(matchB[4], 10) : 12;
+    const mins = matchB[5] ? parseInt(matchB[5], 10) : 0;
+    const meridiem = matchB[6]?.toLowerCase();
+    if (meridiem === 'pm' && hrs < 12) hrs += 12;
+    if (meridiem === 'am' && hrs === 12) hrs = 0;
+
+    const monthIndex = monthNames.findIndex((m) => monthStr.startsWith(m.slice(0, 3))) % 12;
+    const date = new Date(year, monthIndex, day, hrs, mins, 0, 0);
     return { date, formattedIST: formatToIST(date) };
   }
 
-  // 4. Days: "1d", "2d", "1 day ago"
-  const dayMatch = lower.match(/(\d+)\s*(?:d|day|days?)(?:\s*ago)?/);
-  if (dayMatch && dayMatch[1]) {
-    const days = parseInt(dayMatch[1], 10);
-    const date = new Date(now - days * 24 * 60 * 60 * 1000);
-    return { date, formattedIST: formatToIST(date) };
-  }
-
-  // 5. "Yesterday at 11:30 pm" or "Yesterday at 11:30"
-  const yesterdayMatch = lower.match(/yesterday\s+at\s+(\d{1,2}):(\d{2})(?:\s*(am|pm))?/i);
-  if (yesterdayMatch && yesterdayMatch[1] && yesterdayMatch[2]) {
-    let hrs = parseInt(yesterdayMatch[1], 10);
-    const mins = parseInt(yesterdayMatch[2], 10);
+  // 3. "Yesterday at 11:30 pm" or "Yesterday"
+  const yesterdayMatch = lower.match(/\byesterday(?:\s+at\s+(\d{1,2}):(\d{2})(?:\s*(am|pm))?)?\b/i);
+  if (yesterdayMatch) {
+    let hrs = yesterdayMatch[1] ? parseInt(yesterdayMatch[1], 10) : 12;
+    const mins = yesterdayMatch[2] ? parseInt(yesterdayMatch[2], 10) : 0;
     const meridiem = yesterdayMatch[3]?.toLowerCase();
     if (meridiem === 'pm' && hrs < 12) hrs += 12;
     if (meridiem === 'am' && hrs === 12) hrs = 0;
@@ -168,58 +190,38 @@ export function parseFacebookTimestamp(
     return { date, formattedIST: formatToIST(date) };
   }
 
-  // 6. "16 August at 11:54" or "16 Aug at 11:54 AM" or "August 16 at 11:54"
-  const monthNames = [
-    'january', 'february', 'march', 'april', 'may', 'june',
-    'july', 'august', 'september', 'october', 'november', 'december',
-    'jan', 'feb', 'mar', 'apr', 'may', 'jun',
-    'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec'
-  ];
-  const monthPattern = monthNames.join('|');
-
-  // Format A: "16 August at 11:54" or "16 August 2026 at 11:54" or "16 Aug at 11:54 AM"
-  const dateAtTimeRegex = new RegExp(`(\\d{1,2})\\s+(${monthPattern})(?:[\\s,]+(\\d{4}))?\\s+at\\s+(\\d{1,2}):(\\d{2})(?:\\s*(am|pm))?`, 'i');
-  const matchA = clean.match(dateAtTimeRegex);
-  if (matchA && matchA[1] && matchA[2] && matchA[4] && matchA[5]) {
-    const day = parseInt(matchA[1], 10);
-    const monthStr = matchA[2].toLowerCase();
-    const year = matchA[3] ? parseInt(matchA[3], 10) : referenceTime.getFullYear();
-    let hrs = parseInt(matchA[4], 10);
-    const mins = parseInt(matchA[5], 10);
-    const meridiem = matchA[6]?.toLowerCase();
-    if (meridiem === 'pm' && hrs < 12) hrs += 12;
-    if (meridiem === 'am' && hrs === 12) hrs = 0;
-
-    const monthIndex = monthNames.findIndex((m) => monthStr.startsWith(m.slice(0, 3))) % 12;
-    const date = new Date(year, monthIndex, day, hrs, mins, 0, 0);
-    return { date, formattedIST: formatToIST(date) };
-  }
-
-  // Format B: "August 16 at 11:54" or "August 16, 2026 at 11:54 AM"
-  const monthAtTimeRegex = new RegExp(`(${monthPattern})\\s+(\\d{1,2})(?:[\\s,]+(\\d{4}))?\\s+at\\s+(\\d{1,2}):(\\d{2})(?:\\s*(am|pm))?`, 'i');
-  const matchB = clean.match(monthAtTimeRegex);
-  if (matchB && matchB[1] && matchB[2] && matchB[4] && matchB[5]) {
-    const monthStr = matchB[1].toLowerCase();
-    const day = parseInt(matchB[2], 10);
-    const year = matchB[3] ? parseInt(matchB[3], 10) : referenceTime.getFullYear();
-    let hrs = parseInt(matchB[4], 10);
-    const mins = parseInt(matchB[5], 10);
-    const meridiem = matchB[6]?.toLowerCase();
-    if (meridiem === 'pm' && hrs < 12) hrs += 12;
-    if (meridiem === 'am' && hrs === 12) hrs = 0;
-
-    const monthIndex = monthNames.findIndex((m) => monthStr.startsWith(m.slice(0, 3))) % 12;
-    const date = new Date(year, monthIndex, day, hrs, mins, 0, 0);
-    return { date, formattedIST: formatToIST(date) };
-  }
-
-  // 7. "Just now"
+  // 4. "Just now"
   if (lower.includes('just now')) {
     return { date: referenceTime, formattedIST: formatToIST(referenceTime) };
   }
 
-  // 8. Try native Date parser only if string contains explicit numbers & letters
-  if (/\d/.test(clean) && /[a-z]/i.test(clean)) {
+  // 5. Minutes: "15m", "15 mins", "15 min", "15 minutes ago"
+  // Strictly prevent matching month names like "March" as "m"
+  const minMatch = lower.match(/\b(\d+)\s*(?:m|min|mins|minutes?)(?:\s*ago)?\b/);
+  if (minMatch && minMatch[1]) {
+    const mins = parseInt(minMatch[1], 10);
+    const date = new Date(now - mins * 60 * 1000);
+    return { date, formattedIST: formatToIST(date) };
+  }
+
+  // 6. Hours: "2h", "2 hrs", "2 hr", "2 hours ago"
+  const hrMatch = lower.match(/\b(\d+)\s*(?:h|hr|hrs|hours?)(?:\s*ago)?\b/);
+  if (hrMatch && hrMatch[1]) {
+    const hrs = parseInt(hrMatch[1], 10);
+    const date = new Date(now - hrs * 60 * 60 * 1000);
+    return { date, formattedIST: formatToIST(date) };
+  }
+
+  // 7. Days: "1d", "2d", "1 day ago"
+  const dayMatch = lower.match(/\b(\d+)\s*(?:d|day|days?)(?:\s*ago)?\b/);
+  if (dayMatch && dayMatch[1]) {
+    const days = parseInt(dayMatch[1], 10);
+    const date = new Date(now - days * 24 * 60 * 60 * 1000);
+    return { date, formattedIST: formatToIST(date) };
+  }
+
+  // 8. Try native Date parser only if string contains explicit numbers & letters and NO relative tokens
+  if (/\d/.test(clean) && /[a-z]/i.test(clean) && !/\b(?:m|min|h|hr|d|day)\b/.test(clean)) {
     const parsed = new Date(clean);
     if (!isNaN(parsed.getTime())) {
       return { date: parsed, formattedIST: formatToIST(parsed) };
@@ -227,6 +229,51 @@ export function parseFacebookTimestamp(
   }
 
   // No silent execution-time fallback: return null if timestamp is unverified
+  return null;
+}
+
+/**
+ * Scans the header of a post text for explicit publication dates or past year markers.
+ * Used when Facebook's DOM obfuscates the time anchor element.
+ */
+export function extractDateFromPostText(
+  rawText: string,
+  referenceTime: Date = new Date()
+): { date: Date; formattedIST: string } | null {
+  if (!rawText) return null;
+  const header = rawText.slice(0, 400);
+
+  // 1. Explicit calendar date: "5 July 2025", "28 March 2024", "18 Feb 2024"
+  const fullDateMatch = header.match(
+    /\b(\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[,\s]+\d{4})?(?:\s+at\s+\d{1,2}:\d{2}(?:\s*(?:am|pm))?)?)\b/i
+  );
+  if (fullDateMatch && fullDateMatch[1]) {
+    const parsed = parseFacebookTimestamp(fullDateMatch[1], referenceTime);
+    if (parsed) return parsed;
+  }
+
+  // 2. Explicit past year marker e.g. "2023", "2024", "2025"
+  const pastYearMatch = header.match(/\b(202[0-5])\b/);
+  if (pastYearMatch && pastYearMatch[1]) {
+    const yr = parseInt(pastYearMatch[1], 10);
+    const date = new Date(yr, 0, 1);
+    return { date, formattedIST: formatToIST(date) };
+  }
+
+  // 3. Explicit older relative units e.g. "2 months ago", "1 year ago", "3 weeks ago"
+  const relativePast = header.match(/\b(\d+)\s+(months?|years?|weeks?)\s+ago/i);
+  if (relativePast && relativePast[1] && relativePast[2]) {
+    const count = parseInt(relativePast[1], 10);
+    const unit = relativePast[2].toLowerCase();
+    const millis = unit.startsWith('year')
+      ? count * 365 * 24 * 60 * 60 * 1000
+      : unit.startsWith('month')
+      ? count * 30 * 24 * 60 * 60 * 1000
+      : count * 7 * 24 * 60 * 60 * 1000;
+    const date = new Date(referenceTime.getTime() - millis);
+    return { date, formattedIST: formatToIST(date) };
+  }
+
   return null;
 }
 

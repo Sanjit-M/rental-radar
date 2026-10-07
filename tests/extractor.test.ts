@@ -100,6 +100,15 @@ describe('Entity Extractor Engine (Branded & Typed)', () => {
 
     const resInvalid = parseFacebookTimestamp('Invalid date string here', ref);
     expect(resInvalid).toBeNull();
+
+    // Verify fix for March/May colliding with relative minute tokens
+    const resMarch = parseFacebookTimestamp('28 March 2024', ref);
+    expect(resMarch?.date.getFullYear()).toBe(2024);
+    expect(resMarch?.date.getMonth()).toBe(2); // March = 2
+
+    const resJuly = parseFacebookTimestamp('5 July 2025', ref);
+    expect(resJuly?.date.getFullYear()).toBe(2025);
+    expect(resJuly?.date.getMonth()).toBe(6); // July = 6
   });
 
   it('extracts author names from post contact signatures', () => {

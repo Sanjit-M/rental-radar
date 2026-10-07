@@ -2,7 +2,7 @@ import { passesAllFilters, isValidLocation, isValidBHK } from '../domain/parser/
 import { extractAllEntities } from '../domain/parser/extractor';
 import { calculatePeakScooterCommute } from '../domain/commute/router';
 import { computeListingScore } from '../domain/scorer/ratingEngine';
-import { cleanPostText, generatePostId, parseFacebookTimestamp, extractAuthorFromText } from '../domain/parser/cleaner';
+import { cleanPostText, generatePostId, parseFacebookTimestamp, extractAuthorFromText, extractDateFromPostText } from '../domain/parser/cleaner';
 import { listingRepository } from '../db/repository';
 import { hasExistingSession, createPersistentContext, enableFastNetworkInterception } from './browserSession';
 import { RentalListing, FbPostId, UserListingStatus, BHKType } from '../domain/types';
@@ -233,6 +233,19 @@ export async function processPost(
 ): Promise<RentalListing | null> {
   const clean = cleanPostText(rawText);
 
+  // Reject stale posts from past years (2025, 2024, 2023) or past months/years
+  if (/\b202[0-5]\b/.test(clean) || /\b\d+\s+(?:months?|years?)\s+ago\b/i.test(clean)) {
+    return null;
+  }
+
+  // Reject posts older than 7 days if createdAtISO is explicit
+  if (createdAtISO) {
+    const postDate = new Date(createdAtISO);
+    if (!isNaN(postDate.getTime()) && Date.now() - postDate.getTime() > 7 * 24 * 60 * 60 * 1000) {
+      return null;
+    }
+  }
+
   let location = 'Kadubeesanahalli';
   let bhkType: BHKType = '2 BHK (Shared/Full)';
 
@@ -432,13 +445,17 @@ async function scrapeSourceWorker(
           }
         }
 
+        // Reject past years (2020-2025) or older relative times anywhere in post header
+        if (/\b202[0-5]\b/.test(text.slice(0, 500)) || /\b\d+\s+(?:months?|years?)\s+ago\b/i.test(text.slice(0, 500))) {
+          continue;
+        }
+
         if (!postedTimeRaw) {
-          const lines = text.split('\n').slice(0, 5);
-          for (const line of lines) {
-            if (line.match(/\d{1,2}\s+[A-Za-z]+\s+at\s+\d{1,2}:\d{2}|yesterday\s+at\s+\d{1,2}:\d{2}|\d+\s*(?:hrs?|mins?|days?|m|h|d)\s*ago/i)) {
-              postedTimeRaw = line.trim();
-              break;
-            }
+          const fromText = extractDateFromPostText(text);
+          if (fromText) {
+            const ageMillis = Date.now() - fromText.date.getTime();
+            if (ageMillis > 7 * 24 * 60 * 60 * 1000) continue;
+            postedTimeRaw = fromText.formattedIST;
           }
         }
 

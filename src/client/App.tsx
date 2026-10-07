@@ -59,7 +59,7 @@ export const App: React.FC = () => {
   const [bhkType, setBhkType] = useState('all');
   const [furnishing, setFurnishing] = useState('all');
   const [userStatus, setUserStatus] = useState('all');
-  const [recency, setRecency] = useState('all');
+  const [recency, setRecency] = useState('7d');
   const [sortBy, setSortBy] = useState<SortBy>('score_desc');
   const [limit, setLimit] = useState<number>(12);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -276,7 +276,7 @@ export const App: React.FC = () => {
     setBhkType('all');
     setFurnishing('all');
     setUserStatus('all');
-    setRecency('all');
+    setRecency('7d');
     setSortBy('score_desc');
     setLimit(12);
   };
