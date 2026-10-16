@@ -33,6 +33,7 @@ listingsRouter.get('/', async (c) => {
     const userStatus = c.req.query('userStatus') || undefined;
     const recency = c.req.query('recency') || undefined;
     const search = c.req.query('search') || undefined;
+    const zone = c.req.query('zone') || undefined;
     const sortBy = parseSortBy(c.req.query('sortBy'));
 
     const options: ListingQueryOptions = {
@@ -45,6 +46,7 @@ listingsRouter.get('/', async (c) => {
       userStatus,
       recency,
       search,
+      zone,
       sortBy,
     };
 

@@ -116,6 +116,12 @@ export type FbPostId = Brand<string, 'FbPostId'>;
 /** Database internal Listing ID. */
 export type ListingId = Brand<number, 'ListingId'>;
 
+/** Canonical Google Maps Search / Deep-Link URL. */
+export type GoogleMapsUrl = Brand<string, 'GoogleMapsUrl'>;
+
+/** Unique Facebook Group Identifier. */
+export type GroupId = Brand<string, 'GroupId'>;
+
 /** Smart constructor for INR currency. */
 export function makeINR(amount: number): INR {
   // SAFETY: Checked amount bounds; callers cannot construct INR without validation.
@@ -138,6 +144,24 @@ export function makeKilometers(km: number): Kilometers {
 export function makeFbPostId(id: string): FbPostId {
   // SAFETY: Sanitized non-empty ID; callers cannot construct FbPostId without validation.
   return id.trim() as FbPostId;
+}
+
+/** Smart constructor for Listing ID. */
+export function makeListingId(id: number): ListingId {
+  // SAFETY: Coerced integer database ID; callers cannot construct ListingId without validation.
+  return Math.trunc(id) as ListingId;
+}
+
+/** Smart constructor for Google Maps URL. */
+export function makeGoogleMapsUrl(url: string): GoogleMapsUrl {
+  // SAFETY: Validated Google Maps URL string before branding.
+  return url.trim() as GoogleMapsUrl;
+}
+
+/** Smart constructor for Facebook Group ID. */
+export function makeGroupId(id: string): GroupId {
+  // SAFETY: Trimmed group identifier string before branding.
+  return id.trim() as GroupId;
 }
 
 // ==========================================

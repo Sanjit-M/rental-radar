@@ -10,8 +10,20 @@ import {
   FbPostId,
   ListingId,
 } from './prelude';
+import { BangaloreZone } from './bangalore/gazetteer';
 
 export * from './prelude';
+export {
+  type BangaloreZone,
+  type BangaloreLocalityEntry,
+  type ResolvedBangalorePlace,
+  BANGALORE_ZONES,
+  BANGALORE_LOCALITIES,
+  buildSocietyMapsUrl,
+  buildLandmarkMapsUrl,
+  buildLocalityMapsUrl,
+  resolveBangalorePlace,
+} from './bangalore/gazetteer';
 
 // ==========================================
 // 1. Custom Domain Tagged Errors
@@ -69,8 +81,12 @@ export type UserListingStatus =
   | 'applied'
   | 'rejected';
 
-/** Visual badge tier mapped from rating score. */
+/** Visual badge tier mapped from rating score (supports clean v3 and legacy v2 labels). */
 export type RatingTier =
+  | 'Unicorn'
+  | 'Prime'
+  | 'Solid'
+  | 'Fair'
   | '🔥 Unicorn Deal'     // 90 - 100
   | '✨ Great Match'       // 75 - 89
   | '⚡ Moderate Match'    // 55 - 74
@@ -91,19 +107,19 @@ export interface CommuteWindow {
 /** Full point-by-point scoring breakdown. */
 export interface ScoringBreakdown {
   readonly base: number;                // 50 pts
-  readonly rent: number;                // +20, 0, or -20
-  readonly brokerage: number;           // +15 or -30
-  readonly deposit: number;             // +10 or -15 (>2.2x rent)
+  readonly rent: number;                // +20, 0, or -30
+  readonly brokerage: number;           // +15 or -40
+  readonly deposit: number;             // +10 or -30 (>2.2x rent)
   readonly gatedSociety: number;        // +15 or 0
   readonly swimmingPool: number;        // +15 or 0
-  readonly powerBackup: number;         // +10 or 0
-  readonly attachedWashroom: number;    // +10 or -5
+  readonly powerBackup: number;         // +10 or -20
+  readonly attachedWashroom: number;    // +10 or -15
   readonly vegetarianPenalty: number;   // -50 or 0
-  readonly bachelorMatch: number;       // +10 or -25
+  readonly bachelorMatch: number;       // +10 or -30
   readonly walkProximity: number;       // +15 or 0
   readonly furnished: number;           // +5 or 0
-  readonly panathurBypass: number;      // +10 or 0
-  readonly commute: number;             // +20, +10, -5, or -25
+  readonly panathurBypass: number;      // +10 or -35
+  readonly commute: number;             // +20, +10, -10, or -30
 }
 
 /** Extracted property features. */
@@ -134,12 +150,14 @@ export interface ExtractedEntities {
 export interface ValidatedPostDetails {
   readonly location: string;
   readonly bhkType: BHKType;
+  readonly zone?: BangaloreZone | undefined;
 }
 
-/** Complete canonical Rental Listing domain model with cross-group deduplication. */
+/** Complete canonical Rental Listing domain model with cross-group deduplication and Google Maps deep links. */
 export interface RentalListing {
   readonly id: ListingId;
   readonly fbPostId: FbPostId;
+  readonly groupId?: string | undefined;
   readonly groupName: string;
   readonly groupNames?: string[] | undefined;      // Multiple groups if cross-posted
   readonly postCount?: number | undefined;          // Number of times cross-posted
@@ -148,7 +166,11 @@ export interface RentalListing {
   readonly postedTime: string;
   readonly rawText: string;
   readonly location: string;
+  readonly zone?: BangaloreZone | undefined;
   readonly landmark?: string | null | undefined;
+  readonly societyMapsUrl?: string | undefined;
+  readonly landmarkMapsUrl?: string | undefined;
+  readonly localityMapsUrl?: string | undefined;
   readonly title?: string | undefined;
   readonly summary?: string | undefined;
   readonly imageUrls?: string[] | undefined;
@@ -161,6 +183,31 @@ export interface RentalListing {
   readonly userStatus: UserListingStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+/** Discovered or configured Facebook Group source. */
+export interface FbGroup {
+  readonly id: string;
+  readonly name: string;
+  readonly url: string;
+  readonly memberCount: string;
+  readonly category: string;
+  readonly enabled: boolean;
+  readonly listingsCount: number;
+  readonly lastScrapedAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** Aggregated Bangalore locality / society summary with Google Maps deep link. */
+export interface BangalorePlaceSummary {
+  readonly zone: BangaloreZone;
+  readonly locality: string;
+  readonly societyName: string | null;
+  readonly mapsUrl: string;
+  readonly listingCount: number;
+  readonly medianRent: number | null;
+  readonly topScore: number;
 }
 
 /** Paginated API Response Envelope */
@@ -195,6 +242,6 @@ export interface ScrapedPost {
   readonly postedTime: string;
   readonly rawText: string;
   readonly groupName: string;
+  readonly groupId?: string | undefined;
   readonly imageUrls?: string[] | undefined;
 }
-

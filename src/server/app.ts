@@ -4,6 +4,8 @@ import { logger } from 'hono/logger';
 import { listingsRouter } from './routes/listings';
 import { statsRouter } from './routes/stats';
 import { scrapeRouter } from './routes/scrape';
+import { groupsRouter } from './routes/groups';
+import { placesRouter } from './routes/places';
 import { PTP_COORDINATES, SCORING_CONFIG, TARGET_LOCATIONS } from '../domain/config';
 
 export const app = new Hono();
@@ -67,3 +69,10 @@ app.route('/api/stats', statsRouter);
 
 app.route('/scrape', scrapeRouter);
 app.route('/api/scrape', scrapeRouter);
+
+app.route('/groups', groupsRouter);
+app.route('/api/groups', groupsRouter);
+
+app.route('/places', placesRouter);
+app.route('/api/places', placesRouter);
+

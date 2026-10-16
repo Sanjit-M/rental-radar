@@ -1,5 +1,19 @@
-import { TARGET_LOCATIONS, EXCLUDED_LOCATIONS, UNDERPASS_BLOCKED_PATTERNS, KNOWN_SOCIETIES } from '../config';
+import {
+  CORE_PTP_LOCATIONS,
+  CORE_PTP_SOCIETY_KEYS,
+  TARGET_LOCATIONS,
+  EXCLUDED_LOCATIONS,
+  UNDERPASS_BLOCKED_PATTERNS,
+  KNOWN_SOCIETIES,
+} from '../config';
+import { resolveBangalorePlace } from '../bangalore/gazetteer';
 import { BHKType, ValidatedPostDetails, Result, ok, err, FilterRejectionError } from '../types';
+
+/** Options for location and post filter evaluation. */
+export interface FilterEvaluationOptions {
+  /** When true, accepts all Bangalore localities across all 8 metropolitan zones. */
+  readonly cityWide?: boolean | undefined;
+}
 
 /**
  * Checks whether the post text indicates location after the Panathur railway underpass
@@ -19,14 +33,17 @@ export function isAfterRailwayUnderpass(text: string): boolean {
 
 /**
  * Checks whether the post text explicitly matches the target perimeter
- * (Kadubeesanahalli, PTP, Cessna, PTP Back Gate, Boganahalli, Devarabisanahalli, Panathur, Marathahalli, Bellandur, ETV, Ecoworld, etc.)
- * or any verified society in KNOWN_SOCIETIES, and strictly excludes non-target locations
- * or posts located past the Panathur railway underpass.
+ * (or any Bangalore neighborhood when `options.cityWide` is enabled)
+ * and strictly excludes non-Bangalore spam or posts past the Panathur railway underpass.
  *
  * @param text - The raw or cleaned post text.
+ * @param options - Optional evaluation mode (`cityWide` enables all Bangalore zones).
  * @returns Result with matched location name or FilterRejectionError.
  */
-export function isValidLocation(text: string): Result<string, FilterRejectionError> {
+export function isValidLocation(
+  text: string,
+  options?: FilterEvaluationOptions
+): Result<string, FilterRejectionError> {
   const textLower = text.toLowerCase();
   const textClean = textLower.replace(/[\s-]/g, '');
 
@@ -43,17 +60,40 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
     }
   }
 
-  // 3. First check for Known Society Matches
+  // 3. City-Wide Bangalore Gazetteer Mode
+  if (options?.cityWide) {
+    for (const [key, society] of Object.entries(KNOWN_SOCIETIES)) {
+      if (textClean.includes(key) || textLower.includes(society.name.toLowerCase())) {
+        return ok(society.locality ?? society.name);
+      }
+    }
+
+    for (const target of TARGET_LOCATIONS) {
+      if (target === 'ptp' && /\bptp\s*(?:admin|moderator|group|rules?)\b/i.test(textLower) && !/\b(?:flat|room|bhk|rent|stay|near|in)\s+ptp\b/i.test(textLower)) {
+        continue;
+      }
+      const targetPattern = new RegExp(`\\b${escapeRegExp(target)}\\b`, 'i');
+      if (targetPattern.test(textLower)) {
+        const resolved = resolveBangalorePlace(text);
+        return ok(resolved.locality || capitalizeWords(target));
+      }
+    }
+
+    return err(new FilterRejectionError('No Bangalore locality match found in post', text.slice(0, 100)));
+  }
+
+  // 4. Core PTP Perimeter Mode: First check for Known Core Society Matches
   for (const [key, society] of Object.entries(KNOWN_SOCIETIES)) {
+    if (!CORE_PTP_SOCIETY_KEYS.has(key)) continue;
     if (textClean.includes(key) || textLower.includes(society.name.toLowerCase())) {
       return ok(society.name);
     }
   }
 
-  // 4. Check for matched target area
+  // 5. Check for matched core target area
   let matchedTarget: string | null = null;
 
-  for (const target of TARGET_LOCATIONS) {
+  for (const target of CORE_PTP_LOCATIONS) {
     // Avoid false positive on "PTP ADMIN" / "PTP GROUP"
     if (target === 'ptp' && /\bptp\s*(?:admin|moderator|group|rules?)\b/i.test(textLower) && !/\b(?:flat|room|bhk|rent|stay|near|in)\s+ptp\b/i.test(textLower)) {
       continue;
@@ -66,7 +106,7 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
     }
   }
 
-  // 5. If target location was found, verify it is not primarily in an excluded distant location
+  // 6. If target location was found, verify it is not primarily in an excluded distant location
   if (matchedTarget) {
     for (const excl of EXCLUDED_LOCATIONS) {
       const explicitExclLocationPattern = new RegExp(`\\b(?:flat|room|apartment|house|stay|located)\\s+(?:in|at)\\s+${escapeRegExp(excl)}\\b`, 'i');
@@ -81,7 +121,7 @@ export function isValidLocation(text: string): Result<string, FilterRejectionErr
     return ok(matchedTarget);
   }
 
-  // 6. No target location found: check if explicitly in an excluded location
+  // 7. No target location found: check if explicitly in an excluded location
   for (const excl of EXCLUDED_LOCATIONS) {
     const wordPattern = new RegExp(`\\b${escapeRegExp(excl)}\\b`, 'i');
     if (wordPattern.test(textLower)) {
@@ -208,9 +248,13 @@ export function isRentalOffering(text: string): boolean {
  * Executes the complete filter pipeline, returning typed Result monad.
  *
  * @param text - Raw post text.
+ * @param options - Optional filter evaluation options.
  * @returns Result with ValidatedPostDetails or FilterRejectionError.
  */
-export function passesAllFilters(text: string): Result<ValidatedPostDetails, FilterRejectionError> {
+export function passesAllFilters(
+  text: string,
+  options?: FilterEvaluationOptions
+): Result<ValidatedPostDetails, FilterRejectionError> {
   if (!isRentalOffering(text)) {
     return err(new FilterRejectionError('Not a rental offering'));
   }
@@ -219,7 +263,7 @@ export function passesAllFilters(text: string): Result<ValidatedPostDetails, Fil
     return err(new FilterRejectionError('Female-only post excluded'));
   }
 
-  const locResult = isValidLocation(text);
+  const locResult = isValidLocation(text, options);
   if (locResult._tag === 'err') {
     return locResult;
   }
@@ -229,9 +273,12 @@ export function passesAllFilters(text: string): Result<ValidatedPostDetails, Fil
     return bhkResult;
   }
 
+  const resolvedPlace = resolveBangalorePlace(text, locResult.value);
+
   return ok({
     location: locResult.value,
     bhkType: bhkResult.value,
+    zone: resolvedPlace.zone,
   });
 }
 
@@ -242,4 +289,3 @@ function escapeRegExp(string: string): string {
 function capitalizeWords(str: string): string {
   return str.replace(/\b\w/g, (l) => l.toUpperCase());
 }
-

@@ -1,13 +1,16 @@
 import React from 'react';
-import { Compass, ShieldCheck, Users } from 'lucide-react';
+import { Compass, ShieldCheck, Users, MapPin } from 'lucide-react';
+import { BANGALORE_ZONES } from '../../domain/types';
 import { toast } from './ToastStack';
 
+/** Metadata for a Bangalore tech corridor quick filter. */
 export interface TechCorridor {
   readonly id: string;
   readonly label: string;
   readonly subtext: string;
 }
 
+/** Canonical 7 PTP & ORR tech corridors. */
 export const BANGALORE_CORRIDORS: readonly TechCorridor[] = [
   { id: 'all', label: 'All Corridors', subtext: 'Full PTP Perimeter' },
   { id: 'Kadubeesanahalli', label: 'Kadubeesanahalli', subtext: 'Direct PTP Access' },
@@ -18,18 +21,28 @@ export const BANGALORE_CORRIDORS: readonly TechCorridor[] = [
   { id: 'Boganahalli', label: 'Boganahalli', subtext: 'Vaswani & Panathur' },
 ];
 
+const DISPLAY_ZONES = BANGALORE_ZONES.filter((z) => z !== 'Bangalore General');
+
 interface CorridorFilterProps {
   readonly selectedCorridor: string;
   readonly onSelectCorridor: (corridorId: string) => void;
+  readonly selectedZone?: string | undefined;
+  readonly onSelectZone?: ((zone: string) => void) | undefined;
   readonly zeroBrokerageOnly: boolean;
   readonly onToggleZeroBrokerage: () => void;
   readonly bachelorFriendlyOnly: boolean;
   readonly onToggleBachelorFriendly: () => void;
 }
 
+/**
+ * Interactive filter strip for Bangalore Metropolitan Zones, PTP Tech Corridors,
+ * and Zero-Brokerage / Bachelor-Friendly quick toggles.
+ */
 export const CorridorFilter: React.FC<CorridorFilterProps> = ({
   selectedCorridor,
   onSelectCorridor,
+  selectedZone = 'all',
+  onSelectZone,
   zeroBrokerageOnly,
   onToggleZeroBrokerage,
   bachelorFriendlyOnly,
@@ -40,6 +53,15 @@ export const CorridorFilter: React.FC<CorridorFilterProps> = ({
       onSelectCorridor(corridor.id);
       toast.info(`Filtered to ${corridor.label} corridor`);
     }
+  };
+
+  const handleZoneClick = (zone: string) => {
+    if (!onSelectZone) return;
+    const nextZone = selectedZone === zone ? 'all' : zone;
+    onSelectZone(nextZone);
+    toast.info(
+      nextZone === 'all' ? 'Showing all Bangalore zones' : `Filtered to ${nextZone}`,
+    );
   };
 
   const handleToggleZeroBrokerage = () => {
@@ -55,17 +77,16 @@ export const CorridorFilter: React.FC<CorridorFilterProps> = ({
   };
 
   return (
-    <div className="glass-panel p-4 rounded-2xl border border-slate-800 space-y-3 shadow-lg">
+    <div className="bg-[#11131A]/90 p-4 rounded-2xl border border-white/[0.08] space-y-3.5 shadow-lg">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-300">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
           <Compass className="w-4 h-4 text-emerald-400" />
-          <span>Bangalore Tech Corridors</span>
+          <span>Bangalore Zones & Tech Corridors</span>
           <span className="text-[10px] text-slate-400 font-normal">
-            (Peak Scooter Commute to PTP)
+            (City-Wide + Peak Scooter Commute to PTP)
           </span>
         </div>
 
-        {/* Quick-Toggle Filters */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
@@ -73,7 +94,7 @@ export const CorridorFilter: React.FC<CorridorFilterProps> = ({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-[background-color,color,border-color,box-shadow,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
               zeroBrokerageOnly
                 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-md shadow-emerald-500/10'
-                : 'bg-slate-900 text-slate-400 border-slate-700/80 hover:text-slate-200 hover:border-slate-600'
+                : 'bg-[#090A0F] text-slate-400 border-white/[0.08] hover:text-slate-200 hover:border-white/[0.16]'
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -86,7 +107,7 @@ export const CorridorFilter: React.FC<CorridorFilterProps> = ({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-[background-color,color,border-color,box-shadow,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
               bachelorFriendlyOnly
                 ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-md shadow-cyan-500/10'
-                : 'bg-slate-900 text-slate-400 border-slate-700/80 hover:text-slate-200 hover:border-slate-600'
+                : 'bg-[#090A0F] text-slate-400 border-white/[0.08] hover:text-slate-200 hover:border-white/[0.16]'
             }`}
           >
             <Users className="w-3.5 h-3.5 text-cyan-400" />
@@ -95,7 +116,40 @@ export const CorridorFilter: React.FC<CorridorFilterProps> = ({
         </div>
       </div>
 
-      {/* Corridor Pills Scrollable Strip */}
+      {onSelectZone && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+          <button
+            type="button"
+            onClick={() => handleZoneClick('all')}
+            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-[background-color,color,border-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+              selectedZone === 'all'
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                : 'bg-[#090A0F] text-slate-400 border-white/[0.08] hover:text-slate-200 hover:border-white/[0.16]'
+            }`}
+          >
+            <MapPin className="w-3 h-3 text-cyan-400" />
+            <span>All Bangalore Zones</span>
+          </button>
+          {DISPLAY_ZONES.map((zone) => {
+            const active = selectedZone === zone;
+            return (
+              <button
+                key={zone}
+                type="button"
+                onClick={() => handleZoneClick(zone)}
+                className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-[background-color,color,border-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+                  active
+                    ? 'bg-cyan-500/20 text-cyan-200 border-cyan-400/60'
+                    : 'bg-[#090A0F] text-slate-400 border-white/[0.08] hover:text-slate-200 hover:border-white/[0.16]'
+                }`}
+              >
+                <span>{zone}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar">
         {BANGALORE_CORRIDORS.map((corridor) => {
           const isSelected = selectedCorridor === corridor.id;
@@ -106,8 +160,8 @@ export const CorridorFilter: React.FC<CorridorFilterProps> = ({
               onClick={() => handleCorridorClick(corridor)}
               className={`shrink-0 flex flex-col items-start px-3 py-1.5 rounded-xl text-left border transition-[background-color,color,border-color,box-shadow,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                 isSelected
-                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold shadow-md shadow-emerald-500/20 scale-[1.02]'
-                  : 'bg-slate-900/90 text-slate-300 border-slate-700/80 hover:bg-slate-800 hover:border-slate-600'
+                  ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-bold shadow-md shadow-emerald-500/20'
+                  : 'bg-[#090A0F]/90 text-slate-300 border-white/[0.08] hover:bg-white/[0.04] hover:border-white/[0.16]'
               }`}
             >
               <span className="text-xs font-bold leading-tight">{corridor.label}</span>

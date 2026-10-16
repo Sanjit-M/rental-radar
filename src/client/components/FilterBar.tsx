@@ -1,6 +1,6 @@
 import React from 'react';
-import { LayoutGrid, List, Search, Clock } from 'lucide-react';
-import { SortBy } from '../../domain/types';
+import { LayoutGrid, List, Search, Clock, RotateCcw } from 'lucide-react';
+import type { SortBy } from '../../domain/types';
 
 interface FilterBarProps {
   readonly search: string;
@@ -26,6 +26,9 @@ interface FilterBarProps {
   readonly onResetFilters: () => void;
 }
 
+/**
+ * Multi-criteria filter and 2-way view switcher bar for rental listings.
+ */
 export const FilterBar: React.FC<FilterBarProps> = ({
   search,
   onSearchChange,
@@ -47,31 +50,44 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   onLimitChange,
   viewMode,
   onViewModeChange,
+  onResetFilters,
 }) => {
   return (
-    <div className="glass-panel rounded-2xl p-5 mb-6 border border-slate-800 space-y-4 shadow-xl">
-      {/* Top Controls Row */}
-      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-        {/* Search Input */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by locality, keywords, rent, phone..."
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
-          />
+    <div className="bg-[#11131A]/90 rounded-2xl p-5 border border-white/[0.08] space-y-4 shadow-xl">
+      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-end justify-between">
+        <div className="flex-1 space-y-1">
+          <label
+            htmlFor="listings-search-input"
+            className="block text-[11px] font-semibold text-slate-400"
+          >
+            Search Listings
+          </label>
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              id="listings-search-input"
+              type="text"
+              placeholder="Locality, society, landmark, rent, phone..."
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full bg-[#090A0F] border border-white/[0.08] hover:border-white/[0.16] rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
+            />
+          </div>
         </div>
 
-        {/* View Mode & Sort Controls */}
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <span>Per page:</span>
+        <div className="flex flex-wrap items-end gap-2.5 shrink-0">
+          <div className="space-y-1">
+            <label
+              htmlFor="filter-limit-select"
+              className="block text-[11px] text-slate-400 font-medium"
+            >
+              Per page
+            </label>
             <select
+              id="filter-limit-select"
               value={limit}
               onChange={(e) => onLimitChange(Number(e.target.value))}
-              className="bg-slate-900/90 border border-slate-700/80 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer font-medium transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
+              className="bg-[#090A0F] border border-white/[0.08] hover:border-white/[0.16] rounded-xl px-2.5 py-2 text-xs text-white font-mono tabular-nums focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
             >
               <option value={12}>12 listings</option>
               <option value={24}>24 listings</option>
@@ -80,12 +96,18 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             </select>
           </div>
 
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <span>Sort:</span>
+          <div className="space-y-1">
+            <label
+              htmlFor="filter-sort-select"
+              className="block text-[11px] text-slate-400 font-medium"
+            >
+              Sort order
+            </label>
             <select
+              id="filter-sort-select"
               value={sortBy}
               onChange={(e) => onSortByChange(e.target.value as SortBy)}
-              className="bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
+              className="bg-[#090A0F] border border-white/[0.08] hover:border-white/[0.16] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
             >
               <option value="score_desc">Rating Score (High to Low)</option>
               <option value="rent_asc">Rent (Lowest First)</option>
@@ -94,11 +116,22 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             </select>
           </div>
 
-          {/* View Mode Toggle: Grid / Table */}
-          <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-700/80">
+          <button
+            type="button"
+            onClick={onResetFilters}
+            aria-label="Reset filters"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-[#090A0F] hover:bg-white/[0.05] text-slate-300 border border-white/[0.08] hover:border-white/[0.16] transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+            title="Reset all filters"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+            <span>Reset</span>
+          </button>
+
+          <div className="flex items-center bg-[#090A0F] p-1 rounded-xl border border-white/[0.08]">
             <button
               type="button"
               onClick={() => onViewModeChange('grid')}
+              aria-label="Card Grid View"
               className={`p-1.5 rounded-lg transition-[background-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                 viewMode === 'grid'
                   ? 'bg-emerald-500 text-slate-950 font-bold'
@@ -111,6 +144,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <button
               type="button"
               onClick={() => onViewModeChange('table')}
+              aria-label="High-Density Table View"
               className={`p-1.5 rounded-lg transition-[background-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                 viewMode === 'table'
                   ? 'bg-emerald-500 text-slate-950 font-bold'
@@ -124,15 +158,14 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         </div>
       </div>
 
-      {/* Filter Rows */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 pt-3 border-t border-slate-800/80 text-xs">
-        {/* Min Score Slider */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 pt-3 border-t border-white/[0.08] text-xs">
         <div className="space-y-1">
           <div className="flex justify-between text-slate-400 font-medium">
-            <span>Min Score</span>
-            <span className="text-emerald-400 font-mono font-bold">{minScore} pts</span>
+            <label htmlFor="filter-min-score-range">Min Score</label>
+            <span className="text-emerald-400 font-mono tabular-nums font-bold">{minScore} pts</span>
           </div>
           <input
+            id="filter-min-score-range"
             type="range"
             min="0"
             max="100"
@@ -143,13 +176,15 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           />
         </div>
 
-        {/* Max Rent Slider */}
         <div className="space-y-1">
           <div className="flex justify-between text-slate-400 font-medium">
-            <span>Max Rent</span>
-            <span className="text-emerald-400 font-mono font-bold">₹{maxRent.toLocaleString('en-IN')}</span>
+            <label htmlFor="filter-max-rent-range">Max Rent</label>
+            <span className="text-emerald-400 font-mono tabular-nums font-bold">
+              ₹{maxRent.toLocaleString('en-IN')}
+            </span>
           </div>
           <input
+            id="filter-max-rent-range"
             type="range"
             min="15000"
             max="60000"
@@ -160,15 +195,18 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           />
         </div>
 
-        {/* Recency Time Filter */}
         <div className="space-y-1">
-          <label className="text-slate-400 font-medium flex items-center gap-1">
+          <label
+            htmlFor="filter-recency-select"
+            className="text-slate-400 font-medium flex items-center gap-1"
+          >
             <Clock className="w-3 h-3 text-cyan-400" /> Recency
           </label>
           <select
+            id="filter-recency-select"
             value={recency}
             onChange={(e) => onRecencyChange(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
+            className="w-full bg-[#090A0F] border border-white/[0.08] hover:border-white/[0.16] rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
           >
             <option value="all">All Time</option>
             <option value="1h">Past 1 Hour</option>
@@ -180,13 +218,15 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           </select>
         </div>
 
-        {/* BHK Type Selector */}
         <div className="space-y-1">
-          <label className="text-slate-400 font-medium">BHK / Type</label>
+          <label htmlFor="filter-bhk-select" className="text-slate-400 font-medium block">
+            BHK / Type
+          </label>
           <select
+            id="filter-bhk-select"
             value={bhkType}
             onChange={(e) => onBhkTypeChange(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
+            className="w-full bg-[#090A0F] border border-white/[0.08] hover:border-white/[0.16] rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
           >
             <option value="all">All BHK Types</option>
             <option value="1 BHK">1 BHK</option>
@@ -196,13 +236,15 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           </select>
         </div>
 
-        {/* Furnishing */}
         <div className="space-y-1">
-          <label className="text-slate-400 font-medium">Furnishing</label>
+          <label htmlFor="filter-furnishing-select" className="text-slate-400 font-medium block">
+            Furnishing
+          </label>
           <select
+            id="filter-furnishing-select"
             value={furnishing}
             onChange={(e) => onFurnishingChange(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
+            className="w-full bg-[#090A0F] border border-white/[0.08] hover:border-white/[0.16] rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
           >
             <option value="all">Any Furnishing</option>
             <option value="Fully Furnished">Fully Furnished</option>
@@ -211,13 +253,15 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           </select>
         </div>
 
-        {/* Pipeline Status */}
         <div className="space-y-1">
-          <label className="text-slate-400 font-medium">My Pipeline Status</label>
+          <label htmlFor="filter-status-select" className="text-slate-400 font-medium block">
+            My Pipeline Status
+          </label>
           <select
+            id="filter-status-select"
             value={userStatus}
             onChange={(e) => onUserStatusChange(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
+            className="w-full bg-[#090A0F] border border-white/[0.08] hover:border-white/[0.16] rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-emerald-500 cursor-pointer transition-[border-color,background-color] duration-140 ease-[var(--ease-out)]"
           >
             <option value="all">All Listings</option>
             <option value="new">New</option>

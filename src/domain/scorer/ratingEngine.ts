@@ -6,13 +6,35 @@ import { ExtractedEntities, CommuteWindow, ScoringBreakdown, RatingTier } from '
  */
 export interface ScoredListingResult {
   readonly score: number;
+  readonly normalizedScore: number;
   readonly breakdown: ScoringBreakdown;
   readonly tier: RatingTier;
+  readonly cleanTier: 'Unicorn' | 'Prime' | 'Solid' | 'Fair';
+}
+
+/**
+ * Normalizes any RatingTier string to its clean v3 tier label.
+ */
+export function normalizeTierLabel(tier: RatingTier): 'Unicorn' | 'Prime' | 'Solid' | 'Fair' {
+  switch (tier) {
+    case 'Unicorn':
+    case '🔥 Unicorn Deal':
+      return 'Unicorn';
+    case 'Prime':
+    case '✨ Great Match':
+      return 'Prime';
+    case 'Solid':
+    case '⚡ Moderate Match':
+      return 'Solid';
+    case 'Fair':
+    case '⚠️ Low Match':
+      return 'Fair';
+  }
 }
 
 /**
  * Pure, deterministic scoring algorithm mapping property features, financial parameters,
- * and weekday peak commute into a 0–100 rating meter.
+ * and weekday peak commute into a rating score and 14-field breakdown.
  */
 export function computeListingScore(
   entities: ExtractedEntities,
@@ -47,7 +69,7 @@ export function computeListingScore(
   }
   total += rentPoints;
 
-  // 2. Brokerage Evaluation (-30 strict penalty if broker fee)
+  // 2. Brokerage Evaluation (-40 strict penalty if broker fee)
   if (entities.isBrokerage) {
     brokeragePoints = cfg.brokerageApplicable;
   } else {
@@ -138,17 +160,21 @@ export function computeListingScore(
     vegetarianPenalty = cfg.vegetarianOnlyPenalty;
   }
 
-  // Raw, uncapped mathematical sum without artificial 100 ceiling or 0 floor
   const finalScore = total + vegetarianPenalty;
+  const normalizedScore = Math.max(0, Math.min(100, finalScore));
 
   // Determine Tier
   let tier: RatingTier = '⚠️ Low Match';
+  let cleanTier: 'Unicorn' | 'Prime' | 'Solid' | 'Fair' = 'Fair';
   if (finalScore >= 90) {
     tier = '🔥 Unicorn Deal';
+    cleanTier = 'Unicorn';
   } else if (finalScore >= 70) {
     tier = '✨ Great Match';
+    cleanTier = 'Prime';
   } else if (finalScore >= 45) {
     tier = '⚡ Moderate Match';
+    cleanTier = 'Solid';
   }
 
   const breakdown: ScoringBreakdown = {
@@ -168,5 +194,5 @@ export function computeListingScore(
     commute: commutePoints,
   };
 
-  return { score: finalScore, breakdown, tier };
+  return { score: finalScore, normalizedScore, breakdown, tier, cleanTier };
 }

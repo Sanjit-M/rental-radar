@@ -29,9 +29,7 @@ import {
   Send,
   Search,
   Image as ImageIcon,
-  Smartphone,
 } from 'lucide-react';
-import { MobilePrototypeHarness } from './prototype/MobilePrototypeHarness';
 
 export const App: React.FC = () => {
   // Listings & Pagination State
@@ -58,17 +56,6 @@ export const App: React.FC = () => {
   // Learn UI Craft: Command Palette & Listing Drawer State
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [drawerListing, setDrawerListing] = useState<RentalListing | null>(null);
-
-  // Mobile Prototype Mode State (?proto=true, mobile viewport, or manual toggle)
-  const [isPrototypeMode, setIsPrototypeMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('proto') === 'true' || params.get('proto') === '1') return true;
-      if (params.get('proto') === 'false' || params.get('proto') === '0') return false;
-      return window.innerWidth < 768;
-    }
-    return false;
-  });
 
   // Pagination Controls
   const [page, setPage] = useState(1);
@@ -340,23 +327,6 @@ export const App: React.FC = () => {
     }
   };
 
-  if (isPrototypeMode) {
-    return (
-      <MobilePrototypeHarness
-        listings={listings}
-        onStatusChange={handleStatusChange}
-        onExitPrototype={() => {
-          setIsPrototypeMode(false);
-          if (typeof window !== 'undefined') {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('proto');
-            window.history.pushState({}, '', url.toString());
-          }
-        }}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 font-sans selection:bg-emerald-500 selection:text-slate-950">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -382,23 +352,6 @@ export const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap">
-            <button
-              type="button"
-              onClick={() => {
-                setIsPrototypeMode(true);
-                if (typeof window !== 'undefined') {
-                  const url = new URL(window.location.href);
-                  url.searchParams.set('proto', 'true');
-                  window.history.pushState({}, '', url.toString());
-                }
-              }}
-              className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs bg-slate-900 hover:bg-slate-800 text-purple-400 border border-purple-500/40 shadow-lg shadow-purple-500/10 transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
-              title="Open Mobile-Native Prototype Suite"
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>📱 Mobile Prototype</span>
-            </button>
-
             <button
               type="button"
               onClick={() => setIsCommandPaletteOpen(true)}

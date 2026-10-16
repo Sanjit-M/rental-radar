@@ -1,13 +1,24 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { createClient } from '@libsql/client/web';
-import { PTP_COORDINATES, SCORING_CONFIG, TARGET_LOCATIONS } from '../src/domain/config';
+import {
+  PTP_COORDINATES,
+  SCORING_CONFIG,
+  TARGET_LOCATIONS,
+  DEFAULT_FB_GROUPS,
+} from '../src/domain/config';
 import { deduplicateListings } from '../src/domain/parser/deduplicator';
 import { passesAllFilters, isValidLocation, isValidBHK } from '../src/domain/parser/filter';
 import { extractAllEntities } from '../src/domain/parser/extractor';
 import { calculatePeakScooterCommute } from '../src/domain/commute/router';
 import { computeListingScore } from '../src/domain/scorer/ratingEngine';
 import { cleanPostText, generatePostId } from '../src/domain/parser/cleaner';
+import {
+  resolveBangalorePlace,
+  buildSocietyMapsUrl,
+  buildLandmarkMapsUrl,
+  buildLocalityMapsUrl,
+} from '../src/domain/bangalore/gazetteer';
 import {
   RentalListing,
   ExtractedEntities,
@@ -17,10 +28,15 @@ import {
   UserListingStatus,
   BHKType,
   FurnishingStatus,
+  BangaloreZone,
+  FbGroup,
+  BangalorePlaceSummary,
   makeINR,
   makeKilometers,
   makeMinutes,
   makeFbPostId,
+  makeGoogleMapsUrl,
+  makeGroupId,
   ListingId,
 } from '../src/domain/types';
 
@@ -43,13 +59,18 @@ const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS listings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   fb_post_id TEXT UNIQUE NOT NULL,
+  group_id TEXT,
   group_name TEXT NOT NULL,
   post_url TEXT NOT NULL,
   author_name TEXT NOT NULL,
   posted_time TEXT NOT NULL DEFAULT 'Recently',
   raw_text TEXT NOT NULL,
   location TEXT NOT NULL,
+  zone TEXT NOT NULL DEFAULT 'ORR & Bellandur',
   landmark TEXT,
+  society_maps_url TEXT,
+  landmark_maps_url TEXT,
+  locality_maps_url TEXT NOT NULL DEFAULT '',
   title TEXT,
   summary TEXT,
   image_urls TEXT DEFAULT '[]',
@@ -81,6 +102,20 @@ CREATE TABLE IF NOT EXISTS listings (
 CREATE INDEX IF NOT EXISTS idx_listings_score ON listings(score DESC);
 CREATE INDEX IF NOT EXISTS idx_listings_created_at ON listings(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_listings_user_status ON listings(user_status);
+CREATE INDEX IF NOT EXISTS idx_listings_zone ON listings(zone);
+CREATE INDEX IF NOT EXISTS idx_listings_group_id ON listings(group_id);
+CREATE TABLE IF NOT EXISTS fb_groups (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  member_count TEXT DEFAULT '',
+  category TEXT NOT NULL DEFAULT 'Rental & Flatmates',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  listings_count INTEGER NOT NULL DEFAULT 0,
+  last_scraped_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 let schemaReady = false;
@@ -108,6 +143,11 @@ async function ensureSchema(client: any) {
     'ALTER TABLE listings ADD COLUMN title TEXT',
     'ALTER TABLE listings ADD COLUMN summary TEXT',
     "ALTER TABLE listings ADD COLUMN image_urls TEXT DEFAULT '[]'",
+    'ALTER TABLE listings ADD COLUMN group_id TEXT',
+    "ALTER TABLE listings ADD COLUMN zone TEXT NOT NULL DEFAULT 'ORR & Bellandur'",
+    'ALTER TABLE listings ADD COLUMN society_maps_url TEXT',
+    'ALTER TABLE listings ADD COLUMN landmark_maps_url TEXT',
+    "ALTER TABLE listings ADD COLUMN locality_maps_url TEXT NOT NULL DEFAULT ''",
   ];
 
   for (const mig of migrations) {
@@ -131,21 +171,40 @@ function mapRow(row: any): RentalListing {
     }
   }
 
+  const rawText = String(row.raw_text ?? '');
+  const location = String(row.location ?? 'Kadubeesanahalli');
+  const societyName = row.society_name ? String(row.society_name) : null;
+  const landmark = row.landmark ? String(row.landmark) : null;
+
+  const resolvedPlace = resolveBangalorePlace(rawText, location, societyName, landmark);
+  const zone = (row.zone ? String(row.zone) : resolvedPlace.zone) as BangaloreZone;
+  const localityMapsUrl = row.locality_maps_url
+    ? makeGoogleMapsUrl(String(row.locality_maps_url))
+    : resolvedPlace.localityMapsUrl;
+  const societyMapsUrl = row.society_maps_url
+    ? makeGoogleMapsUrl(String(row.society_maps_url))
+    : resolvedPlace.societyMapsUrl ??
+      (societyName ? buildSocietyMapsUrl(societyName, location) : undefined);
+  const landmarkMapsUrl = row.landmark_maps_url
+    ? makeGoogleMapsUrl(String(row.landmark_maps_url))
+    : resolvedPlace.landmarkMapsUrl ??
+      (landmark ? buildLandmarkMapsUrl(landmark, location) : undefined);
+
   const entities: ExtractedEntities = {
     rent: row.rent !== null ? makeINR(Number(row.rent)) : null,
     deposit: row.deposit !== null ? makeINR(Number(row.deposit)) : null,
     isBrokerage: Boolean(row.is_brokerage),
     isGatedSociety: Boolean(row.is_gated_society),
-    societyName: row.society_name || null,
-    landmark: row.landmark || null,
+    societyName,
+    landmark,
     hasSwimmingPool: Boolean(row.has_swimming_pool),
     hasPowerBackup: Boolean(row.has_power_backup),
     hasAttachedWashroom: Boolean(row.has_attached_washroom),
     hasBalcony: Boolean(row.has_balcony),
-    isVegetarianOnly: /veg\s*only|vegetarian\s*only/i.test(row.raw_text),
+    isVegetarianOnly: /veg\s*only|vegetarian\s*only/i.test(rawText),
     isMaleBachelorAllowed: true,
-    isFemaleOnly: /female\s*only|girls?\s*only/i.test(row.raw_text),
-    isWalkingDistance: /walking\s*distance|walk\s*to\s*ptp/i.test(row.raw_text),
+    isFemaleOnly: /female\s*only|girls?\s*only/i.test(rawText),
+    isWalkingDistance: /walking\s*distance|walk\s*to\s*ptp/i.test(rawText),
     furnishing: row.furnishing as FurnishingStatus,
     isKadubeesanahalliDirect: Boolean(row.is_kadubeesanahalli_direct),
     contactPhone: row.contact_phone || null,
@@ -185,13 +244,18 @@ function mapRow(row: any): RentalListing {
   return {
     id: Number(row.id) as ListingId,
     fbPostId: makeFbPostId(row.fb_post_id),
+    groupId: row.group_id ? makeGroupId(String(row.group_id)) : undefined,
     groupName: row.group_name,
     postUrl: row.post_url,
     authorName: row.author_name || 'Facebook Member',
     postedTime: row.posted_time || 'Recently',
-    rawText: row.raw_text,
-    location: row.location,
-    landmark: row.landmark || undefined,
+    rawText,
+    location,
+    zone,
+    landmark: landmark || undefined,
+    societyMapsUrl,
+    landmarkMapsUrl,
+    localityMapsUrl,
     title: row.title || undefined,
     summary: row.summary || undefined,
     imageUrls: parsedImages.length > 0 ? parsedImages : undefined,
@@ -274,6 +338,7 @@ const getListingsHandler = async (c: any) => {
     const userStatus = c.req.query('userStatus');
     const recency = c.req.query('recency');
     const search = c.req.query('search');
+    const zone = c.req.query('zone');
     const sortBy = c.req.query('sortBy') || 'score_desc';
 
     let whereClause = ' WHERE 1=1';
@@ -326,7 +391,11 @@ const getListingsHandler = async (c: any) => {
     const rawRows = dataRes.rows || [];
 
     const rawListings = rawRows.map(mapRow);
-    const allCanonicalListings = deduplicateListings(rawListings);
+    const zoneFilteredListings =
+      zone && zone !== 'all' && zone !== 'All'
+        ? rawListings.filter((l) => (l.zone ?? 'ORR & Bellandur').toLowerCase() === zone.toLowerCase())
+        : rawListings;
+    const allCanonicalListings = deduplicateListings(zoneFilteredListings);
     const totalCount = allCanonicalListings.length;
     const totalPages = totalCount === 0 ? 0 : Math.ceil(totalCount / limit);
     const hasMore = page < totalPages;
@@ -589,13 +658,14 @@ const parseSingleHandler = async (c: any) => {
       location = filterResult.value.location;
       bhkType = filterResult.value.bhkType;
     } else {
-      const locMatch = isValidLocation(clean);
+      const locMatch = isValidLocation(clean, { cityWide: true });
       if (locMatch._tag === 'ok') location = locMatch.value;
       const bhkMatch = isValidBHK(clean);
       if (bhkMatch._tag === 'ok') bhkType = bhkMatch.value;
     }
 
     const entities = extractAllEntities(clean, imageUrls);
+    const resolvedPlace = resolveBangalorePlace(clean, location, entities.societyName, entities.landmark);
     const commute = calculatePeakScooterCommute(
       entities.societyLat,
       entities.societyLon,
@@ -611,7 +681,8 @@ const parseSingleHandler = async (c: any) => {
     const upsertSql = `
       INSERT INTO listings (
         fb_post_id, group_name, post_url, author_name, posted_time, raw_text,
-        location, landmark, title, summary, image_urls,
+        location, zone, landmark, society_maps_url, landmark_maps_url, locality_maps_url,
+        title, summary, image_urls,
         bhk_type, rent, deposit, is_brokerage,
         is_gated_society, society_name, has_swimming_pool,
         has_power_backup, has_attached_washroom, has_balcony,
@@ -621,7 +692,8 @@ const parseSingleHandler = async (c: any) => {
         user_status, created_at, updated_at
       ) VALUES (
         ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?,
         ?, ?, ?, ?,
         ?, ?, ?,
         ?, ?, ?,
@@ -632,7 +704,11 @@ const parseSingleHandler = async (c: any) => {
       )
       ON CONFLICT(fb_post_id) DO UPDATE SET
         author_name=excluded.author_name,
+        zone=excluded.zone,
         landmark=excluded.landmark,
+        society_maps_url=excluded.society_maps_url,
+        landmark_maps_url=excluded.landmark_maps_url,
+        locality_maps_url=excluded.locality_maps_url,
         title=excluded.title,
         summary=excluded.summary,
         image_urls=excluded.image_urls,
@@ -658,7 +734,11 @@ const parseSingleHandler = async (c: any) => {
         'Just now',
         clean,
         location,
+        resolvedPlace.zone,
         entities.landmark || null,
+        resolvedPlace.societyMapsUrl ?? null,
+        resolvedPlace.landmarkMapsUrl ?? null,
+        resolvedPlace.localityMapsUrl,
         title,
         summary,
         JSON.stringify(imagesToSave),
@@ -704,7 +784,11 @@ const parseSingleHandler = async (c: any) => {
         postedTime: 'Just now',
         rawText: clean,
         location,
+        zone: resolvedPlace.zone,
         landmark: entities.landmark || undefined,
+        societyMapsUrl: resolvedPlace.societyMapsUrl,
+        landmarkMapsUrl: resolvedPlace.landmarkMapsUrl,
+        localityMapsUrl: resolvedPlace.localityMapsUrl,
         title,
         summary,
         imageUrls: imagesToSave.length > 0 ? imagesToSave : undefined,
@@ -727,5 +811,204 @@ const parseSingleHandler = async (c: any) => {
 app.post('/scrape/parse-single', parseSingleHandler);
 app.post('/api/scrape/parse-single', parseSingleHandler);
 
+// Groups Endpoints
+async function seedDefaultGroupsIfNeeded(client: any): Promise<void> {
+  const existing = await client.execute('SELECT COUNT(*) as count FROM fb_groups');
+  const count = Number((existing.rows[0] as Record<string, unknown> | undefined)?.['count'] ?? 0);
+  if (count > 0) return;
+
+  for (const g of DEFAULT_FB_GROUPS) {
+    await client.execute({
+      sql: `
+        INSERT INTO fb_groups (id, name, url, member_count, category, enabled, listings_count, last_scraped_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 1, 0, NULL, datetime('now'), datetime('now'))
+        ON CONFLICT(id) DO NOTHING
+      `,
+      args: [g.id, g.name, g.url, g.memberCount, g.category],
+    });
+  }
+}
+
+const getGroupsHandler = async (c: any) => {
+  try {
+    const client = getDbClient();
+    await ensureSchema(client);
+    await seedDefaultGroupsIfNeeded(client);
+
+    const res = await client.execute(`
+      SELECT
+        g.id,
+        g.name,
+        g.url,
+        g.member_count,
+        g.category,
+        g.enabled,
+        g.last_scraped_at,
+        g.listings_count,
+        g.created_at,
+        g.updated_at,
+        COUNT(l.id) as live_count
+      FROM fb_groups g
+      LEFT JOIN listings l ON (l.group_id = g.id OR l.group_name = g.name)
+      GROUP BY g.id, g.name, g.url, g.member_count, g.category, g.enabled, g.last_scraped_at, g.listings_count, g.created_at, g.updated_at
+      ORDER BY g.enabled DESC, live_count DESC, g.name ASC
+    `);
+
+    const now = new Date().toISOString();
+    const groups: FbGroup[] = (res.rows || []).map((r: any) => {
+      const row = r as Record<string, unknown>;
+      const liveCount = Number(row['live_count'] ?? 0);
+      const storedCount = Number(row['listings_count'] ?? 0);
+      return {
+        id: makeGroupId(String(row['id'])),
+        name: String(row['name']),
+        url: String(row['url']),
+        memberCount: String(row['member_count'] ?? ''),
+        category: String(row['category'] ?? 'Rental & Flatmates'),
+        enabled: Boolean(row['enabled']),
+        lastScrapedAt: row['last_scraped_at'] ? String(row['last_scraped_at']) : null,
+        listingsCount: Math.max(liveCount, storedCount),
+        createdAt: String(row['created_at'] ?? now),
+        updatedAt: String(row['updated_at'] ?? now),
+      };
+    });
+
+    return c.json(groups);
+  } catch (err: any) {
+    return c.json({ error: err?.message || String(err), groups: [] }, 500);
+  }
+};
+
+const patchGroupHandler = async (c: any) => {
+  try {
+    const id = c.req.param('id');
+    const client = getDbClient();
+    await ensureSchema(client);
+    await seedDefaultGroupsIfNeeded(client);
+
+    let requestedEnabled: boolean | undefined;
+    try {
+      const body = await c.req.json();
+      if (typeof body.enabled === 'boolean') {
+        requestedEnabled = body.enabled;
+      }
+    } catch {
+      // Allow empty body to toggle
+    }
+
+    const currentRes = await client.execute({
+      sql: 'SELECT enabled FROM fb_groups WHERE id = ? LIMIT 1',
+      args: [id],
+    });
+    if (currentRes.rows.length === 0) {
+      return c.json({ error: 'Group not found' }, 404);
+    }
+
+    const currentEnabled = Boolean((currentRes.rows[0] as Record<string, unknown>)['enabled']);
+    const nextEnabled = requestedEnabled !== undefined ? requestedEnabled : !currentEnabled;
+
+    await client.execute({
+      sql: "UPDATE fb_groups SET enabled = ?, updated_at = datetime('now') WHERE id = ?",
+      args: [nextEnabled ? 1 : 0, id],
+    });
+
+    return c.json({ success: true, id, enabled: nextEnabled });
+  } catch (err: any) {
+    return c.json({ error: err?.message || String(err) }, 500);
+  }
+};
+
+app.get('/groups', getGroupsHandler);
+app.get('/api/groups', getGroupsHandler);
+app.patch('/groups/:id', patchGroupHandler);
+app.patch('/api/groups/:id', patchGroupHandler);
+
+function computeMedianRent(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[mid] ?? null;
+  }
+  return Math.round(((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2);
+}
+
+// Places Directory Endpoints
+const getPlacesHandler = async (c: any) => {
+  try {
+    const client = getDbClient();
+    await ensureSchema(client);
+
+    const res = await client.execute('SELECT * FROM listings ORDER BY score DESC, created_at DESC');
+    const rawListings = (res.rows || []).map(mapRow);
+    const canonical = deduplicateListings(rawListings);
+
+    const buckets = new Map<
+      string,
+      {
+        zone: BangaloreZone;
+        locality: string;
+        societyName: string | null;
+        mapsUrl: string;
+        rents: number[];
+        topScore: number;
+        count: number;
+      }
+    >();
+
+    for (const listing of canonical) {
+      const zone = listing.zone || 'ORR & Bellandur';
+      const locality = listing.location || 'Kadubeesanahalli';
+      const societyName = listing.entities.societyName || null;
+      const key = `${zone}::${locality.toLowerCase()}::${(societyName || '').toLowerCase()}`;
+      const mapsUrl =
+        listing.societyMapsUrl ||
+        listing.localityMapsUrl ||
+        (societyName ? buildSocietyMapsUrl(societyName, locality) : buildLocalityMapsUrl(locality));
+
+      const existing = buckets.get(key);
+      if (existing) {
+        existing.count += 1;
+        if (listing.entities.rent !== null) {
+          existing.rents.push(Number(listing.entities.rent));
+        }
+        if (listing.score > existing.topScore) {
+          existing.topScore = listing.score;
+        }
+      } else {
+        buckets.set(key, {
+          zone,
+          locality,
+          societyName,
+          mapsUrl,
+          rents: listing.entities.rent !== null ? [Number(listing.entities.rent)] : [],
+          topScore: listing.score,
+          count: 1,
+        });
+      }
+    }
+
+    const places: BangalorePlaceSummary[] = Array.from(buckets.values())
+      .map((entry) => ({
+        zone: entry.zone,
+        locality: entry.locality,
+        societyName: entry.societyName,
+        mapsUrl: entry.mapsUrl,
+        listingCount: entry.count,
+        medianRent: computeMedianRent(entry.rents),
+        topScore: entry.topScore,
+      }))
+      .sort((a, b) => b.listingCount - a.listingCount || b.topScore - a.topScore);
+
+    return c.json(places);
+  } catch (err: any) {
+    return c.json({ error: err?.message || String(err), places: [] }, 500);
+  }
+};
+
+app.get('/places', getPlacesHandler);
+app.get('/api/places', getPlacesHandler);
+
 export default app.fetch;
+
 

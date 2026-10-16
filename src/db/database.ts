@@ -7,13 +7,18 @@ export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS listings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   fb_post_id TEXT UNIQUE NOT NULL,
+  group_id TEXT,
   group_name TEXT NOT NULL,
   post_url TEXT NOT NULL,
   author_name TEXT NOT NULL,
   posted_time TEXT NOT NULL DEFAULT 'Recently',
   raw_text TEXT NOT NULL,
   location TEXT NOT NULL,
+  zone TEXT NOT NULL DEFAULT 'ORR & Bellandur',
   landmark TEXT,
+  society_maps_url TEXT,
+  landmark_maps_url TEXT,
+  locality_maps_url TEXT NOT NULL DEFAULT '',
   title TEXT,
   summary TEXT,
   image_urls TEXT DEFAULT '[]',
@@ -46,12 +51,27 @@ CREATE TABLE IF NOT EXISTS listings (
 CREATE INDEX IF NOT EXISTS idx_listings_score ON listings(score DESC);
 CREATE INDEX IF NOT EXISTS idx_listings_created_at ON listings(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_listings_user_status ON listings(user_status);
+CREATE INDEX IF NOT EXISTS idx_listings_zone ON listings(zone);
+
+CREATE TABLE IF NOT EXISTS fb_groups (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  member_count TEXT DEFAULT '',
+  category TEXT NOT NULL DEFAULT 'Rental & Flatmates',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  listings_count INTEGER NOT NULL DEFAULT 0,
+  last_scraped_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 CREATE TABLE IF NOT EXISTS scrape_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   status TEXT NOT NULL,
   items_scanned INTEGER NOT NULL,
   items_matched INTEGER NOT NULL,
+  groups_scanned INTEGER NOT NULL DEFAULT 0,
   error_message TEXT,
   ran_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -111,17 +131,23 @@ class WebLibSqlDatabase implements IDatabase {
       'ALTER TABLE listings ADD COLUMN title TEXT',
       'ALTER TABLE listings ADD COLUMN summary TEXT',
       "ALTER TABLE listings ADD COLUMN image_urls TEXT DEFAULT '[]'",
+      'ALTER TABLE listings ADD COLUMN group_id TEXT',
+      "ALTER TABLE listings ADD COLUMN zone TEXT NOT NULL DEFAULT 'ORR & Bellandur'",
+      'ALTER TABLE listings ADD COLUMN society_maps_url TEXT',
+      'ALTER TABLE listings ADD COLUMN landmark_maps_url TEXT',
+      "ALTER TABLE listings ADD COLUMN locality_maps_url TEXT NOT NULL DEFAULT ''",
+      'ALTER TABLE scrape_logs ADD COLUMN groups_scanned INTEGER NOT NULL DEFAULT 0',
+      'CREATE INDEX IF NOT EXISTS idx_listings_zone ON listings(zone)',
     ];
 
     for (const mig of migrations) {
       try {
         await this.client.execute(mig);
       } catch {
-        // Column already exists, ignore
+        // Column or index already exists, ignore
       }
     }
   }
-
 
   async execute(sql: string, args: any[] = []): Promise<{ changes: number; lastInsertRowid?: number | bigint | undefined }> {
     await this.ensureInitialized();

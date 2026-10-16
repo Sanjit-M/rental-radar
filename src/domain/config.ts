@@ -1,3 +1,9 @@
+import {
+  BANGALORE_LOCALITIES,
+  KNOWN_SOCIETIES as GAZETTEER_SOCIETIES,
+  type KnownSociety as GazetteerSociety,
+} from './bangalore/gazetteer';
+
 // Prestige Tech Park Anchor Coordinates (Kadubeesanahalli Main Gate)
 export const PTP_COORDINATES = {
   name: 'Prestige Tech Park (PTP), Kadubeesanahalli',
@@ -5,208 +11,36 @@ export const PTP_COORDINATES = {
   lon: 77.6917,
 };
 
-// Known Gated Societies with verified attributes & coordinates for Leaflet OpenStreetMap
-export interface KnownSociety {
-  name: string;
-  hasPool: boolean;
-  isGated: boolean;
-  hasPowerBackup: boolean;
-  isKadubeesanahalliDirect: boolean;
-  lat: number;
-  lon: number;
-}
+// Known Gated Societies with verified attributes & coordinates
+export type KnownSociety = GazetteerSociety;
 
-export const KNOWN_SOCIETIES: Record<string, KnownSociety> = {
-  sobhairis: {
-    name: 'Sobha Iris',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9372,
-    lon: 77.6934,
-  },
-  sobhahibiscus: {
-    name: 'Sobha Hibiscus',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9358,
-    lon: 77.6948,
-  },
-  sobhajasmine: {
-    name: 'Sobha Jasmine',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9365,
-    lon: 77.6955,
-  },
-  assetzmarq: {
-    name: 'Assetz Marq',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9410,
-    lon: 77.6960,
-  },
-  assetz: {
-    name: 'Assetz East Point',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9422,
-    lon: 77.6980,
-  },
-  orchidlakeview: {
-    name: 'Goyal Orchid Lakeview',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9320,
-    lon: 77.6890,
-  },
-  prestigesunnyside: {
-    name: 'Prestige Sunnyside',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9390,
-    lon: 77.6950,
-  },
-  divyasree: {
-    name: 'Divyasree 77 East',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9450,
-    lon: 77.6880,
-  },
-  sjr: {
-    name: 'SJR Parkway Homes',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9315,
-    lon: 77.6920,
-  },
-  salarpuria: {
-    name: 'Salarpuria Sattva',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9360,
-    lon: 77.6900,
-  },
-  salarpuriasanctity: {
-    name: 'Salarpuria Sanctity',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9345,
-    lon: 77.6895,
-  },
-  adarshpalm: {
-    name: 'Adarsh Palm Retreat',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9280,
-    lon: 77.6860,
-  },
-  rohanjharoka: {
-    name: 'Rohan Jharoka',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9430,
-    lon: 77.6850,
-  },
-  godrejreflections: {
-    name: 'Godrej Reflections',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9305,
-    lon: 77.6875,
-  },
-  snnrajlakeview: {
-    name: 'SNN Raj Lakeview',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9290,
-    lon: 77.6840,
-  },
-  brenunity: {
-    name: 'Bren Unity',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9335,
-    lon: 77.6975,
-  },
-  dsrwaterscape: {
-    name: 'DSR Waterscape',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9312,
-    lon: 77.6955,
-  },
-  mantriespana: {
-    name: 'Mantri Espana',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9300,
-    lon: 77.6930,
-  },
-  vaswanireserve: {
-    name: 'Vaswani Reserve',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9350,
-    lon: 77.6990,
-  },
-  umiyacity: {
-    name: 'Umiya City / Velocity',
-    hasPool: false,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: true,
-    lat: 12.9375,
-    lon: 77.6910,
-  },
-  panathuroasis: {
-    name: 'Panathur Gated Society',
-    hasPool: true,
-    isGated: true,
-    hasPowerBackup: true,
-    isKadubeesanahalliDirect: false,
-    lat: 12.9340,
-    lon: 77.7010,
-  },
-};
+export const KNOWN_SOCIETIES: Record<string, KnownSociety> = GAZETTEER_SOCIETIES;
+
+// Core 21 ORR/PTP society keys for strict PTP perimeter mode
+export const CORE_PTP_SOCIETY_KEYS: ReadonlySet<string> = new Set([
+  'sobhairis',
+  'sobhahibiscus',
+  'sobhajasmine',
+  'assetzmarq',
+  'assetz',
+  'orchidlakeview',
+  'prestigesunnyside',
+  'divyasree',
+  'sjr',
+  'salarpuria',
+  'salarpuriasanctity',
+  'adarshpalm',
+  'rohanjharoka',
+  'godrejreflections',
+  'snnrajlakeview',
+  'brenunity',
+  'dsrwaterscape',
+  'mantriespana',
+  'vaswanireserve',
+  'umiyacity',
+  'panathuroasis',
+  'prestigetechvista',
+]);
 
 export const LOCALITY_COORDS: Record<string, { lat: number; lon: number; isDirect: boolean }> = {
   kadubeesanahalli: { lat: 12.9380, lon: 77.6925, isDirect: true },
@@ -250,9 +84,17 @@ export const LOCALITY_COORDS: Record<string, { lat: number; lon: number; isDirec
   marathalli: { lat: 12.9460, lon: 77.6980, isDirect: true },
   marathahali: { lat: 12.9460, lon: 77.6980, isDirect: true },
   marathali: { lat: 12.9460, lon: 77.6980, isDirect: true },
+  ...Object.fromEntries(
+    BANGALORE_LOCALITIES.flatMap((entry) =>
+      entry.aliases.map((alias) => [
+        alias,
+        { lat: entry.lat, lon: entry.lon, isDirect: entry.isDirectToPtp },
+      ])
+    )
+  ),
 };
 
-export const TARGET_LOCATIONS = [
+export const CORE_PTP_LOCATIONS = [
   'kadubeesanahalli',
   'kadubisanahalli',
   'kadhubesanahalli',
@@ -283,6 +125,16 @@ export const TARGET_LOCATIONS = [
   'marathahali',
   'marathali',
 ];
+
+export const TARGET_LOCATIONS = Array.from(
+  new Set([
+    ...CORE_PTP_LOCATIONS,
+    ...BANGALORE_LOCALITIES.flatMap((entry) => [
+      entry.canonicalName.toLowerCase(),
+      ...entry.aliases,
+    ]),
+  ])
+);
 
 export const UNDERPASS_BLOCKED_PATTERNS = [
   /after\s+(?:the\s+)?(?:railway\s+)?underpass/i,
@@ -360,4 +212,134 @@ export const SCORING_CONFIG = {
   commute13To18min: -10,
   commuteGt18min: -30,
 };
+
+export interface DefaultFbGroupSeed {
+  readonly id: string;
+  readonly name: string;
+  readonly url: string;
+  readonly memberCount: string;
+  readonly category: string;
+}
+
+export const DEFAULT_FB_GROUPS: readonly DefaultFbGroupSeed[] = [
+  {
+    id: '591413389157630',
+    name: 'Flat and Flatmates Bellandur, Kadubeesanahalli (200k)',
+    url: 'https://www.facebook.com/groups/591413389157630/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '200K',
+    category: 'ORR & Bellandur',
+  },
+  {
+    id: '1265072124774804',
+    name: 'Flats and Flatmates Kadubeesanahalli / PTP',
+    url: 'https://www.facebook.com/groups/1265072124774804/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '45K',
+    category: 'ORR & Bellandur',
+  },
+  {
+    id: '507116087403813',
+    name: 'Flat and Flatmates Bangalore (145k)',
+    url: 'https://www.facebook.com/groups/507116087403813/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '145K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: 'flatsandflatmatesbangaluru',
+    name: 'Flats and Flatmates Bengaluru (130k)',
+    url: 'https://www.facebook.com/groups/flatsandflatmatesbangaluru/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '130K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: 'findmyroombangalore',
+    name: 'Find My Room Bangalore (105k)',
+    url: 'https://www.facebook.com/groups/findmyroombangalore/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '105K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: '697855465840944',
+    name: 'Flats Without Brokers Bangalore (100k)',
+    url: 'https://www.facebook.com/groups/697855465840944/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '100K',
+    category: 'Zero Brokerage',
+  },
+  {
+    id: '329320681157074',
+    name: 'Flat and Flatmates Bangalore (94k)',
+    url: 'https://www.facebook.com/groups/329320681157074/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '94K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: '1703473933213030',
+    name: 'Flat and Flatmates Bangalore (86k)',
+    url: 'https://www.facebook.com/groups/1703473933213030/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '86K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: '876779221120021',
+    name: 'Flats Without Brokers Bangalore (72k)',
+    url: 'https://www.facebook.com/groups/876779221120021/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '72K',
+    category: 'Zero Brokerage',
+  },
+  {
+    id: '1918733344819133',
+    name: 'Flats and Flatmates Bangalore (63k)',
+    url: 'https://www.facebook.com/groups/1918733344819133/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '63K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: '636932320207695',
+    name: 'Bangalore Flatmates Community (39k)',
+    url: 'https://www.facebook.com/groups/636932320207695/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '39K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: '224322741398603',
+    name: 'Flat and Flatmates Bangalore (39k)',
+    url: 'https://www.facebook.com/groups/224322741398603/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '39K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: '184612851933582',
+    name: 'Flats and Flatmates Bangalore (35k)',
+    url: 'https://www.facebook.com/groups/184612851933582/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '35K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: '147988655894011',
+    name: 'Bangalore Rentals & Flatmates (35k)',
+    url: 'https://www.facebook.com/groups/147988655894011/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '35K',
+    category: 'Rental & Flatmates',
+  },
+  {
+    id: '380069852631811',
+    name: 'Flats Without Broker Bangalore (31k)',
+    url: 'https://www.facebook.com/groups/380069852631811/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '31K',
+    category: 'Zero Brokerage',
+  },
+  {
+    id: 'flatandflatmatesbangalore',
+    name: 'Flat and Flatmates Bangalore',
+    url: 'https://www.facebook.com/groups/flatandflatmatesbangalore/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '180K',
+    category: 'Bangalore City-Wide',
+  },
+  {
+    id: 'flatswithoutbrokersbangalore',
+    name: 'Flats Without Brokers Bangalore',
+    url: 'https://www.facebook.com/groups/flatswithoutbrokersbangalore/?sorting_setting=CHRONOLOGICAL',
+    memberCount: '110K',
+    category: 'Zero Brokerage',
+  },
+];
 
