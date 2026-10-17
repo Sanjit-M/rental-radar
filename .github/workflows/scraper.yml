@@ -1,7 +1,10 @@
-name: Hourly Facebook Rental Scraper
+name: Scheduled Facebook Rental Scraper
 
 on:
-  workflow_dispatch: # Allows manual trigger from GitHub Actions tab only
+  schedule:
+    # Runs 3x daily at 09:00 AM, 03:00 PM, and 09:00 PM IST (03:30, 09:30, 15:30 UTC)
+    - cron: '30 3,9,15 * * *'
+  workflow_dispatch:
 
 jobs:
   scrape-and-sync:
@@ -12,26 +15,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          version: 10
+          go-version: '1.22'
+          cache: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
+      - name: Ensure sqlite3 CLI is installed
+        run: |
+          if ! command -v sqlite3 >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y sqlite3
+          fi
 
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+      - name: Build Go radar-scraper binary
+        run: |
+          mkdir -p bin data
+          go build -o bin/radar-scraper ./cmd/radar-scraper
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install chromium --with-deps
-
-      - name: Run Rental Scraper & Sync to Turso
+      - name: Run Rental Scraper & Sync to Turso Cloud
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           FB_SESSION_STORAGE: ${{ secrets.FB_SESSION_STORAGE }}
-        run: pnpm scrape
+        run: |
+          ./bin/radar-scraper sync
+          ./bin/radar-scraper run --workers=4 --limit-groups=10 --headless=true
+          ./bin/radar-scraper sync

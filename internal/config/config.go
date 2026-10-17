@@ -362,11 +362,15 @@ func detectChromeBinary(home string) string {
 		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 		"/Applications/Chromium.app/Contents/MacOS/Chromium",
 		"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+		"/usr/bin/google-chrome-stable",
+		"/usr/bin/google-chrome",
+		"/usr/bin/chromium-browser",
+		"/usr/bin/chromium",
 	}
 
-	// Also glob ms-playwright in case version number differs
-	matches, _ := filepath.Glob(filepath.Join(home, "Library/Caches/ms-playwright/chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"))
-	candidates = append(matches, candidates...)
+	macMatches, _ := filepath.Glob(filepath.Join(home, "Library/Caches/ms-playwright/chromium-*/chrome-mac*/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"))
+	linuxMatches, _ := filepath.Glob(filepath.Join(home, ".cache/ms-playwright/chromium-*/chrome-linux/chrome"))
+	candidates = append(macMatches, append(linuxMatches, candidates...)...)
 
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {

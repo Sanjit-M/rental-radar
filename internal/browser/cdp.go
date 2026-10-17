@@ -56,7 +56,7 @@ func LaunchCDP(ctx context.Context, cfg *config.Config, headless bool) (*CDPBrow
 		"--lang=en-US",
 	}
 	if headless {
-		args = append(args, "--headless=new")
+		args = append(args, "--headless=new", "--no-sandbox", "--disable-gpu")
 	}
 	args = append(args, "about:blank")
 
