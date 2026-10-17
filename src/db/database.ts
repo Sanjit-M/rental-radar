@@ -1,6 +1,6 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { createClient, Client } from '@libsql/client';
+import { createClient } from '@libsql/client'; // import { createClient, Client } from '@libsql/client'
+
+type LibSqlClient = ReturnType<typeof createClient>;
 
 /** Schema SQL shared identically across both local SQLite and Turso Cloud SQLite. */
 export const SCHEMA_SQL = `
@@ -87,7 +87,7 @@ export interface IDatabase {
 }
 
 class WebLibSqlDatabase implements IDatabase {
-  private client: Client;
+  private client: LibSqlClient;
   private isCloud: boolean;
   private initPromise: Promise<void> | null = null;
 
@@ -181,17 +181,7 @@ function createDatabase(): IDatabase {
     return new WebLibSqlDatabase(tursoUrl, tursoToken);
   }
 
-  // Fallback in local node development
   const localDbUrl = process.env.DATABASE_URL || 'file:data/listings.db';
-  if (localDbUrl.startsWith('file:')) {
-    const rawPath = localDbUrl.slice(5);
-    const dir = path.dirname(path.resolve(process.cwd(), rawPath));
-    if (dir && !fs.existsSync(dir)) {
-      try {
-        fs.mkdirSync(dir, { recursive: true });
-      } catch {}
-    }
-  }
   return new WebLibSqlDatabase(localDbUrl);
 }
 
