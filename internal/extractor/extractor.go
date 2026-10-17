@@ -60,11 +60,11 @@ var (
 
 	rentPatterns = []*regexp.Regexp{
 		regexp.MustCompile(`(?i)\b(\d{1,2}(?:\.\d+)?)\s*k\s*(?:/|\s*per\s*)?(?:month|pm)\b`),
-		regexp.MustCompile(`(?i)(?:rent|rent\s*is|rent\s*amount)\s*[:=-]?\s*(?:₹|rs\.?|inr)?\s*(\d{1,2}(?:\.\d+)?)\s*k\b`),
-		regexp.MustCompile(`(?i)(?:rent|rent\s*is|rent\s*amount)\s*[:=-]?\s*(?:₹|rs\.?|inr)?\s*(\d{1,2}[,\d]{3,5})\b`),
+		regexp.MustCompile(`(?i)(?:rent(?:\s*(?:including|incl\.?|with)\s*maintenance)?|rent\s*is|rent\s*amount)\s*[:=-]?\s*(?:₹|rs\.?|inr)?\s*(\d{1,2}(?:\.\d+)?)\s*k\b`),
+		regexp.MustCompile(`(?i)(?:rent(?:\s*(?:including|incl\.?|with)\s*maintenance)?|rent\s*is|rent\s*amount)\s*[:=-]?\s*(?:₹|rs\.?|inr)?\s*(\d{1,2}[,\d]{3,5})\b`),
 		regexp.MustCompile(`(?i)(?:₹|rs\.?|inr)\s*(\d{1,2}(?:\.\d+)?)\s*k\b`),
-		regexp.MustCompile(`(?i)(?:₹|rs\.?|inr)\s*(\d{4,5})\b`),
-		regexp.MustCompile(`(?i)\b(\d{4,5})\s*(?:/|\s*per\s*)?(?:month|pm)\b`),
+		regexp.MustCompile(`(?i)(?:₹|rs\.?|inr)\s*(\d{1,2}[,\d]{3,5})\b`),
+		regexp.MustCompile(`(?i)\b(\d{1,2}[,\d]{3,5})\s*(?:/|\s*per\s*)?(?:month|pm)\b`),
 		regexp.MustCompile(`(?i)\b(\d{1,2}(?:\.\d+)?)\s*k\b`),
 	}
 
@@ -264,12 +264,14 @@ func ExtractGenderPreference(text string) (bool, bool) {
 	return maleAllowed, femaleOnly
 }
 
-// IsRentalOffering returns true if the text is a valid Bangalore rental post (not overseas spam or pure seeker).
+// IsRentalOffering returns true if the text is a valid Bangalore rental post (not overseas spam, property sale, or pure seeker).
 func IsRentalOffering(text string) bool {
 	lower := strings.ToLower(text)
 	spamWords := []string{
 		"selling my bike", "selling car", "laptop for sale", "job opening", "we are hiring",
 		"interiors design", "dubai", "sharjah", "bur dubai", "al barsha",
+		"apartment for sale", "flat for sale", "house for sale", "villa for sale",
+		"crore", "appliance repair", "upcoming landmark", "submit your first comment",
 	}
 	for _, w := range spamWords {
 		if strings.Contains(lower, w) {
@@ -278,8 +280,15 @@ func IsRentalOffering(text string) bool {
 	}
 	trimmed := strings.TrimSpace(lower)
 	pureSeeker := strings.HasPrefix(trimmed, "looking for a 1bhk") ||
+		strings.HasPrefix(trimmed, "looking for a 2bhk") ||
+		strings.HasPrefix(trimmed, "looking for a 3bhk") ||
 		strings.HasPrefix(trimmed, "looking for a flat") ||
 		strings.HasPrefix(trimmed, "i need a flat") ||
+		strings.HasPrefix(trimmed, "need 1bhk") ||
+		strings.HasPrefix(trimmed, "need 2bhk") ||
+		strings.HasPrefix(trimmed, "need 3bhk") ||
+		strings.Contains(lower, "\nneed 2bhk") ||
+		strings.Contains(lower, "\nneed 1bhk") ||
 		strings.HasPrefix(trimmed, "searching for flat")
 	if pureSeeker && !flatmateRe.MatchString(lower) {
 		return false

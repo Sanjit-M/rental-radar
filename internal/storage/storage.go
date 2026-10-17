@@ -810,6 +810,12 @@ func (s *Store) BackfillAndSync() (*SyncStats, error) {
 
 		// Normalize score into [0, 100] and ensure 14-field breakdown
 		ent := extractor.ExtractEntities(r.RawText, nil)
+		if r.Rent == nil && ent.Rent != nil {
+			r.Rent = ent.Rent
+		}
+		if r.Deposit == nil && ent.Deposit != nil {
+			r.Deposit = ent.Deposit
+		}
 		scored := scorer.ScoreListing(ent)
 		r.Score = scored.Score
 		r.Tier = scored.Tier

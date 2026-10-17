@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Effect } from 'effect';
+
+vi.hoisted(() => {
+  process.env.DATABASE_URL = 'file:/tmp/rental-radar-gazetteer-test.db';
+  delete process.env.TURSO_DATABASE_URL;
+});
 import {
   BANGALORE_ZONES,
   BANGALORE_LOCALITIES,

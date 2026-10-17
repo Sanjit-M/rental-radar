@@ -371,7 +371,15 @@ func RunScrape(ctx context.Context, cfg *config.Config, store *storage.Store, op
 					if author == "" {
 						author = extractor.ExtractAuthorFromText(clean)
 					}
-					_, postedIST, _ := extractor.ParseFacebookTimestamp(p.PostedTime, now)
+					timeSource := p.PostedTime
+					if timeSource == "" {
+						lines := strings.Split(p.RawText, "\n")
+						if len(lines) > 6 {
+							lines = lines[:6]
+						}
+						timeSource = strings.Join(lines, " ")
+					}
+					_, postedIST, _ := extractor.ParseFacebookTimestamp(timeSource, now)
 					scored := scorer.ScoreListing(ent)
 					fbPostID := extractor.GeneratePostID(g.Name, author, clean)
 
