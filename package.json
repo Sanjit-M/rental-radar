@@ -17,9 +17,13 @@
     "auth:setup": "tsx src/scraper/authSetup.ts",
     "auth:export": "tsx src/scraper/exportSession.ts",
     "login:fb": "tsx scripts/loginFacebook.ts",
-    "scrape": "tsx src/scraper/cli.ts",
+    "scrape": "./bin/radar-scraper run",
+    "scrape:groups": "./bin/radar-scraper groups",
+    "scrape:sync": "./bin/radar-scraper sync",
+    "scrape:schedule": "./bin/radar-scraper schedule install",
     "sync:turso": "tsx src/scraper/syncTurso.ts",
-    "purge:scrape": "tsx src/scraper/purgeAndScrape.ts"
+    "purge:scrape": "tsx src/scraper/purgeAndScrape.ts",
+    "verify": "bash scripts/verify-all.sh"
   },
   "dependencies": {
     "@hono/node-server": "^1.8.2",

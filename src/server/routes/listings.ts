@@ -1,59 +1,70 @@
 import { Hono } from 'hono';
-import { listingRepository, ListingQueryOptions } from '../../db/repository';
-import { UserListingStatus, SortBy } from '../../domain/types';
+import { Effect, Either } from 'effect';
+import type { ListingQueryOptions } from '../../db/repository';
+import {
+  ListingRepository,
+  ListingRepositoryLive,
+  ListingNotFoundError,
+} from '../../domain/services/RepositoryService';
+import type { UserListingStatus, SortBy } from '../../domain/types';
 
 const VALID_SORT_VALUES: readonly SortBy[] = ['score_desc', 'rent_asc', 'commute_asc', 'newest'];
+const VALID_USER_STATUSES: readonly UserListingStatus[] = [
+  'new',
+  'interested',
+  'called',
+  'applied',
+  'rejected',
+];
+
+function isSortBy(raw: string | undefined): raw is SortBy {
+  return raw !== undefined && (VALID_SORT_VALUES as readonly string[]).includes(raw);
+}
 
 function parseSortBy(raw: string | undefined): SortBy {
-  // Narrow the raw query param against the exhaustive SortBy union.
-  // Any unrecognised value falls through to the safe default.
-  return VALID_SORT_VALUES.includes(raw as SortBy)
-    ? (raw as SortBy)
-    : 'score_desc';
+  return isSortBy(raw) ? raw : 'score_desc';
+}
+
+function isUserListingStatus(raw: unknown): raw is UserListingStatus {
+  return typeof raw === 'string' && (VALID_USER_STATUSES as readonly string[]).includes(raw);
 }
 
 export const listingsRouter = new Hono();
 
 listingsRouter.get('/', async (c) => {
-  try {
-    const rawPage = c.req.query('page');
-    const rawLimit = c.req.query('limit');
-    const parsedPage = rawPage ? parseInt(rawPage, 10) : 1;
-    const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 12;
-    const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
-    const limit = isNaN(parsedLimit) || parsedLimit < 1 ? 12 : Math.min(100, parsedLimit);
+  const rawPage = c.req.query('page');
+  const rawLimit = c.req.query('limit');
+  const parsedPage = rawPage ? parseInt(rawPage, 10) : 1;
+  const parsedLimit = rawLimit ? parseInt(rawLimit, 10) : 12;
+  const page = isNaN(parsedPage) || parsedPage < 1 ? 1 : parsedPage;
+  const limit = isNaN(parsedLimit) || parsedLimit < 1 ? 12 : Math.min(100, parsedLimit);
 
-    const rawMinScore = c.req.query('minScore');
-    const rawMaxRent = c.req.query('maxRent');
-    const parsedMinScore = rawMinScore ? parseInt(rawMinScore, 10) : NaN;
-    const parsedMaxRent = rawMaxRent ? parseInt(rawMaxRent, 10) : NaN;
+  const rawMinScore = c.req.query('minScore');
+  const rawMaxRent = c.req.query('maxRent');
+  const parsedMinScore = rawMinScore ? parseInt(rawMinScore, 10) : NaN;
+  const parsedMaxRent = rawMaxRent ? parseInt(rawMaxRent, 10) : NaN;
 
-    const bhkType = c.req.query('bhkType') || undefined;
-    const furnishing = c.req.query('furnishing') || undefined;
-    const userStatus = c.req.query('userStatus') || undefined;
-    const recency = c.req.query('recency') || undefined;
-    const search = c.req.query('search') || undefined;
-    const zone = c.req.query('zone') || undefined;
-    const sortBy = parseSortBy(c.req.query('sortBy'));
+  const options: ListingQueryOptions = {
+    page,
+    limit,
+    minScore: isNaN(parsedMinScore) ? undefined : parsedMinScore,
+    maxRent: isNaN(parsedMaxRent) ? undefined : parsedMaxRent,
+    bhkType: c.req.query('bhkType') || undefined,
+    furnishing: c.req.query('furnishing') || undefined,
+    userStatus: c.req.query('userStatus') || undefined,
+    recency: c.req.query('recency') || undefined,
+    search: c.req.query('search') || undefined,
+    zone: c.req.query('zone') || undefined,
+    sortBy: parseSortBy(c.req.query('sortBy')),
+  };
 
-    const options: ListingQueryOptions = {
-      page,
-      limit,
-      minScore: isNaN(parsedMinScore) ? undefined : parsedMinScore,
-      maxRent: isNaN(parsedMaxRent) ? undefined : parsedMaxRent,
-      bhkType,
-      furnishing,
-      userStatus,
-      recency,
-      search,
-      zone,
-      sortBy,
-    };
+  const program = Effect.gen(function* () {
+    const repo = yield* ListingRepository;
+    return yield* repo.getPaginatedListings(options);
+  }).pipe(Effect.either, Effect.provide(ListingRepositoryLive));
 
-    const response = await listingRepository.getPaginatedListings(options);
-    return c.json(response);
-  } catch (err: any) {
-    console.error('Error fetching listings:', err);
+  const result = await Effect.runPromise(program);
+  if (Either.isLeft(result)) {
     return c.json(
       {
         count: 0,
@@ -63,53 +74,79 @@ listingsRouter.get('/', async (c) => {
         totalPages: 0,
         hasMore: false,
         listings: [],
-        error: err.message || 'Database connection error',
+        error: result.left.message || 'Database connection error',
         hint: 'Please ensure TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are valid in your Vercel project settings.',
       },
       500
     );
   }
+
+  return c.json(result.right);
 });
 
 listingsRouter.get('/:id', async (c) => {
-  try {
-    const id = parseInt(c.req.param('id'), 10);
-    if (isNaN(id)) {
-      return c.json({ error: 'Invalid ID' }, 400);
-    }
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) {
+    return c.json({ error: 'Invalid ID' }, 400);
+  }
 
-    const listing = await listingRepository.getListingById(id);
-    if (!listing) {
+  const program = Effect.gen(function* () {
+    const repo = yield* ListingRepository;
+    return yield* repo.getListingById(id);
+  }).pipe(Effect.either, Effect.provide(ListingRepositoryLive));
+
+  const result = await Effect.runPromise(program);
+  if (Either.isLeft(result)) {
+    if (result.left._tag === 'ListingNotFoundError') {
       return c.json({ error: 'Listing not found' }, 404);
     }
-
-    return c.json(listing);
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
+    return c.json({ error: result.left.message }, 500);
   }
+
+  return c.json(result.right);
 });
 
 listingsRouter.patch('/:id/status', async (c) => {
-  try {
-    const id = parseInt(c.req.param('id'), 10);
-    if (isNaN(id)) {
-      return c.json({ error: 'Invalid ID' }, 400);
-    }
-
-    const body = await c.req.json<{ status: UserListingStatus }>();
-    const validStatuses: UserListingStatus[] = ['new', 'interested', 'called', 'applied', 'rejected'];
-    if (!body.status || !validStatuses.includes(body.status)) {
-      return c.json({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }, 400);
-    }
-
-    const success = await listingRepository.updateStatus(id, body.status);
-    if (!success) {
-      return c.json({ error: 'Failed to update status' }, 404);
-    }
-
-    const updated = await listingRepository.getListingById(id);
-    return c.json({ success: true, listing: updated });
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
+  const id = parseInt(c.req.param('id'), 10);
+  if (isNaN(id)) {
+    return c.json({ error: 'Invalid ID' }, 400);
   }
+
+  let rawStatus: unknown;
+  try {
+    const body = await c.req.json<{ status?: unknown }>();
+    rawStatus = body.status;
+  } catch {
+    return c.json({ error: 'Invalid request body' }, 400);
+  }
+
+  if (!isUserListingStatus(rawStatus)) {
+    return c.json(
+      { error: `Invalid status. Must be one of: ${VALID_USER_STATUSES.join(', ')}` },
+      400
+    );
+  }
+
+  const status = rawStatus;
+  const program = Effect.gen(function* () {
+    const repo = yield* ListingRepository;
+    const updated = yield* repo.updateStatus(id, status);
+    if (!updated) {
+      return yield* Effect.fail(
+        new ListingNotFoundError({ id, message: 'Failed to update status' })
+      );
+    }
+    const listing = yield* repo.getListingById(id);
+    return { success: true as const, listing };
+  }).pipe(Effect.either, Effect.provide(ListingRepositoryLive));
+
+  const result = await Effect.runPromise(program);
+  if (Either.isLeft(result)) {
+    if (result.left._tag === 'ListingNotFoundError') {
+      return c.json({ error: result.left.message }, 404);
+    }
+    return c.json({ error: result.left.message }, 500);
+  }
+
+  return c.json(result.right);
 });

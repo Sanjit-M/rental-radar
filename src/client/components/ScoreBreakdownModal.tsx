@@ -7,82 +7,15 @@ interface ScoreBreakdownModalProps {
   readonly onClose: () => void;
 }
 
-/**
- * Displays the complete 14-point mathematical score breakdown for a listing.
- */
-export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listing, onClose }) => {
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+interface ScoreRowItem {
+  readonly label: string;
+  readonly points: number;
+  readonly desc: string;
+}
 
-  useEffect(() => {
-    if (!listing) return;
-
-    if (document.activeElement instanceof HTMLElement) {
-      previousActiveElementRef.current = document.activeElement;
-    }
-
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    const originalOverflow = document.body.style.overflow;
-    const originalPaddingRight = document.body.style.paddingRight;
-
-    document.body.style.overflow = 'hidden';
-    if (scrollbarWidth > 0) {
-      document.body.style.paddingRight = `${scrollbarWidth}px`;
-    }
-
-    const focusTimer = setTimeout(() => {
-      const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusable && focusable.length > 0) {
-        focusable[0]?.focus();
-      }
-    }, 20);
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-
-      if (e.key === 'Tab') {
-        const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
-        if (!focusable || focusable.length === 0) return;
-
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-
-        if (e.shiftKey) {
-          if (document.activeElement === first && last) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else if (document.activeElement === last && first) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      clearTimeout(focusTimer);
-      window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = originalOverflow;
-      document.body.style.paddingRight = originalPaddingRight;
-      previousActiveElementRef.current?.focus();
-    };
-  }, [listing, onClose]);
-
-  if (!listing) return null;
-
+function buildScoreRows(listing: RentalListing): ScoreRowItem[] {
   const b = listing.scoreBreakdown;
-
-  const rows = [
+  return [
     {
       label: 'Baseline Points',
       points: b.base,
@@ -178,6 +111,124 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
       desc: `${listing.commute.twoWayAvgPeakMins}m average peak scooter time (${b.commute > 0 ? `+${b.commute}` : b.commute})`,
     },
   ];
+}
+
+const ScoreBreakdownRow: React.FC<{ readonly row: ScoreRowItem }> = ({ row }) => {
+  return (
+    <div
+      className={`flex items-center justify-between p-2.5 rounded-lg border text-xs ${
+        row.points > 0
+          ? 'bg-emerald-950/20 border-emerald-500/20'
+          : row.points < 0
+            ? 'bg-rose-950/20 border-rose-500/20'
+            : 'bg-[#090A0F]/60 border-white/[0.06]'
+      }`}
+    >
+      <div className="flex items-center gap-2.5">
+        {row.points > 0 ? (
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        ) : row.points < 0 ? (
+          <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
+        ) : (
+          <div className="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[10px] text-slate-400 font-mono">
+            —
+          </div>
+        )}
+        <div>
+          <div className="font-semibold text-slate-200">{row.label}</div>
+          <div className="text-[11px] text-slate-400">{row.desc}</div>
+        </div>
+      </div>
+      <div
+        className={`font-mono tabular-nums font-bold text-sm ${
+          row.points > 0
+            ? 'text-emerald-400'
+            : row.points < 0
+              ? 'text-rose-400'
+              : 'text-slate-400'
+        }`}
+      >
+        {row.points > 0 ? `+${row.points}` : row.points}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Displays the complete 14-point mathematical score breakdown for a listing.
+ */
+export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({
+  listing,
+  onClose,
+}) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousActiveElementRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!listing) return;
+
+    if (document.activeElement instanceof HTMLElement) {
+      previousActiveElementRef.current = document.activeElement;
+    }
+
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+
+    document.body.style.overflow = 'hidden';
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    const focusTimer = setTimeout(() => {
+      const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable && focusable.length > 0) {
+        focusable[0]?.focus();
+      }
+    }, 20);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusable = modalRef.current?.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        if (!focusable || focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === first && last) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last && first) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      clearTimeout(focusTimer);
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
+      previousActiveElementRef.current?.focus();
+    };
+  }, [listing, onClose]);
+
+  if (!listing) return null;
+
+  const rows = buildScoreRows(listing);
 
   return (
     <dialog
@@ -194,10 +245,13 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
           <div>
             <h3 id="score-breakdown-title" className="text-lg font-bold text-white flex items-center gap-2">
               <span>{listing.tier}</span>
-              <span className="font-mono tabular-nums text-emerald-400 font-extrabold">{listing.score} pts</span>
+              <span className="font-mono tabular-nums text-emerald-400 font-extrabold">
+                {listing.score} pts
+              </span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              {listing.zone ? `${listing.zone} • ` : ''}{listing.location} • {listing.bhkType}
+              {listing.zone ? `${listing.zone} • ` : ''}
+              {listing.location} • {listing.bhkType}
             </p>
           </div>
           <button
@@ -213,43 +267,7 @@ export const ScoreBreakdownModal: React.FC<ScoreBreakdownModalProps> = ({ listin
 
         <div className="p-5 max-h-[60vh] overflow-y-auto space-y-2">
           {rows.map((row) => (
-            <div
-              key={row.label}
-              className={`flex items-center justify-between p-2.5 rounded-lg border text-xs ${
-                row.points > 0
-                  ? 'bg-emerald-950/20 border-emerald-500/20'
-                  : row.points < 0
-                    ? 'bg-rose-950/20 border-rose-500/20'
-                    : 'bg-[#090A0F]/60 border-white/[0.06]'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                {row.points > 0 ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                ) : row.points < 0 ? (
-                  <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                ) : (
-                  <div className="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center text-[10px] text-slate-400 font-mono">
-                    —
-                  </div>
-                )}
-                <div>
-                  <div className="font-semibold text-slate-200">{row.label}</div>
-                  <div className="text-[11px] text-slate-400">{row.desc}</div>
-                </div>
-              </div>
-              <div
-                className={`font-mono tabular-nums font-bold text-sm ${
-                  row.points > 0
-                    ? 'text-emerald-400'
-                    : row.points < 0
-                      ? 'text-rose-400'
-                      : 'text-slate-400'
-                }`}
-              >
-                {row.points > 0 ? `+${row.points}` : row.points}
-              </div>
-            </div>
+            <ScoreBreakdownRow key={row.label} row={row} />
           ))}
         </div>
 

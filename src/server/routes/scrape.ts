@@ -1,6 +1,22 @@
 import { Hono } from 'hono';
+import { cleanPostText } from '../../domain/parser/cleaner';
+import { passesAllFilters } from '../../domain/parser/filter';
 
 export const scrapeRouter = new Hono();
+
+interface ScrapeFeedItem {
+  readonly text?: string;
+  readonly groupName?: string;
+  readonly authorName?: string;
+  readonly postedTime?: string;
+  readonly postUrl?: string;
+  readonly imageUrls?: string[];
+  readonly bypassFilters?: boolean;
+}
+
+interface IngestFeedBody extends ScrapeFeedItem {
+  readonly items?: ScrapeFeedItem[];
+}
 
 let localScrapeState: {
   status: 'idle' | 'in_progress' | 'completed';
@@ -22,7 +38,13 @@ scrapeRouter.post('/trigger', async (c) => {
   localScrapeState = { status: 'in_progress', conclusion: null, updatedAt: new Date().toISOString() };
   try {
     if (process.env.NODE_ENV === 'test') {
-      localScrapeState = { status: 'completed', conclusion: 'success', updatedAt: new Date().toISOString(), scanned: 6, matched: 6 };
+      localScrapeState = {
+        status: 'completed',
+        conclusion: 'success',
+        updatedAt: new Date().toISOString(),
+        scanned: 6,
+        matched: 6,
+      };
       return c.json({
         status: 'success',
         message: 'Scraped 6 posts, found 6 matches near PTP.',
@@ -56,10 +78,10 @@ scrapeRouter.post('/trigger', async (c) => {
 
 scrapeRouter.post('/parse-single', async (c) => {
   try {
-    const body = await c.req.json();
-    const { processPost } = await import('../../scraper/groupScraper');
-    const { cleanPostText } = await import('../../domain/parser/cleaner');
-    const { passesAllFilters } = await import('../../domain/parser/filter');
+    const [body, { processPost }] = await Promise.all([
+      c.req.json<ScrapeFeedItem>(),
+      import('../../scraper/groupScraper'),
+    ]);
 
     const rawText = body.text || '';
     const postUrl = body.postUrl || '';
@@ -68,8 +90,20 @@ scrapeRouter.post('/parse-single', async (c) => {
     const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
     const bypassFilters = Boolean(body.bypassFilters);
 
-    if (!postUrl || !postUrl.startsWith('https://www.facebook.com/') || postUrl.includes('manual_') || postUrl.includes('fb_') || postUrl.includes('seed_')) {
-      return c.json({ success: false, error: 'A valid Facebook post permalink (https://www.facebook.com/...) is strictly required.' }, 400);
+    if (
+      !postUrl ||
+      !postUrl.startsWith('https://www.facebook.com/') ||
+      postUrl.includes('manual_') ||
+      postUrl.includes('fb_') ||
+      postUrl.includes('seed_')
+    ) {
+      return c.json(
+        {
+          success: false,
+          error: 'A valid Facebook post permalink (https://www.facebook.com/...) is strictly required.',
+        },
+        400
+      );
     }
 
     if (!rawText || rawText.trim().length < 15) {
@@ -129,27 +163,30 @@ scrapeRouter.post('/seed', async (c) => {
 
 scrapeRouter.post('/ingest-feed', async (c) => {
   try {
-    const body = await c.req.json();
-    const items = Array.isArray(body.items) ? body.items : [body];
-    const { processPost } = await import('../../scraper/groupScraper');
+    const [body, { processPost }] = await Promise.all([
+      c.req.json<IngestFeedBody>(),
+      import('../../scraper/groupScraper'),
+    ]);
+    const items: ScrapeFeedItem[] = Array.isArray(body.items) ? body.items : [body];
 
-    let ingested = 0;
-    for (const item of items) {
-      if (!item.text || item.text.trim().length < 15) continue;
-      const listing = await processPost(
-        item.text,
-        item.groupName || 'External Feed Webhook',
-        item.authorName || 'Feed Contributor',
-        item.postedTime || 'Recently',
-        item.postUrl || '',
-        undefined,
-        undefined,
-        'new',
-        item.imageUrls,
-        Boolean(item.bypassFilters)
-      );
-      if (listing) ingested++;
-    }
+    const results = await Promise.all(
+      items.map(async (item) => {
+        if (!item.text || item.text.trim().length < 15) return null;
+        return processPost(
+          item.text,
+          item.groupName || 'External Feed Webhook',
+          item.authorName || 'Feed Contributor',
+          item.postedTime || 'Recently',
+          item.postUrl || '',
+          undefined,
+          undefined,
+          'new',
+          item.imageUrls,
+          Boolean(item.bypassFilters)
+        );
+      })
+    );
+    const ingested = results.filter((listing) => listing !== null).length;
 
     return c.json({
       status: 'success',

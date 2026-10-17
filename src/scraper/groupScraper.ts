@@ -1,3 +1,4 @@
+import type { Page, ElementHandle } from 'playwright';
 import { passesAllFilters, isValidLocation, isValidBHK } from '../domain/parser/filter';
 import { extractAllEntities } from '../domain/parser/extractor';
 import { calculatePeakScooterCommute } from '../domain/commute/router';
@@ -318,78 +319,281 @@ export async function processPost(
   return listingRepository.upsertListing(listing);
 }
 
+async function expandSeeMoreButtons(page: Page, limit: number): Promise<void> {
+  try {
+    const seeMoreButtons = await page.$$('div[role="button"]:has-text("See more"), span:has-text("See more")');
+    await Promise.all(
+      seeMoreButtons.slice(0, limit).map((btn) => btn.click({ timeout: 300 }).catch(() => {}))
+    );
+  } catch {
+    // Ignore
+  }
+}
+
+async function scrollFeedStep(page: Page, stepIndex: number, totalSteps: number): Promise<void> {
+  if (stepIndex >= totalSteps) return;
+  await page.mouse.wheel(0, 1400);
+  await page.waitForTimeout(900);
+  if (stepIndex % 3 === 0) {
+    await expandSeeMoreButtons(page, 8);
+  }
+  await scrollFeedStep(page, stepIndex + 1, totalSteps);
+}
+
+function resolveCanonicalPostUrl(rawHrefs: ReadonlyArray<string | null>): string {
+  for (const rawHref of rawHrefs) {
+    if (!rawHref) continue;
+    const href = rawHref.startsWith('http') ? rawHref : `https://www.facebook.com${rawHref}`;
+
+    try {
+      const urlObj = new URL(href);
+      if (!urlObj.hostname.includes('facebook.com')) continue;
+
+      const multiPermalinks = urlObj.searchParams.get('multi_permalinks');
+      if (multiPermalinks && /^\d+$/.test(multiPermalinks)) {
+        const groupMatch = urlObj.pathname.match(/\/groups\/([^\/?#]+)/);
+        if (groupMatch && groupMatch[1]) {
+          return `https://www.facebook.com/groups/${groupMatch[1]}/posts/${multiPermalinks}/`;
+        }
+      }
+
+      const postsMatch = urlObj.pathname.match(/\/groups\/([^\/?#]+)\/posts\/([^\/?#]+)/);
+      if (postsMatch && postsMatch[1] && postsMatch[2]) {
+        return `https://www.facebook.com/groups/${postsMatch[1]}/posts/${postsMatch[2]}/`;
+      }
+
+      const permalinkMatch = urlObj.pathname.match(/\/groups\/([^\/?#]+)\/permalink\/([^\/?#]+)/);
+      if (permalinkMatch && permalinkMatch[1] && permalinkMatch[2]) {
+        return `https://www.facebook.com/groups/${permalinkMatch[1]}/posts/${permalinkMatch[2]}/`;
+      }
+
+      if (urlObj.pathname.includes('permalink.php') && urlObj.searchParams.has('story_fbid')) {
+        const storyFbid = urlObj.searchParams.get('story_fbid');
+        const id = urlObj.searchParams.get('id');
+        if (storyFbid) {
+          return id
+            ? `https://www.facebook.com/permalink.php?story_fbid=${storyFbid}&id=${id}`
+            : `https://www.facebook.com/permalink.php?story_fbid=${storyFbid}`;
+        }
+      }
+
+      const userPostMatch = urlObj.pathname.match(/^\/([^\/?#]+)\/posts\/([^\/?#]+)/);
+      if (
+        userPostMatch &&
+        userPostMatch[1] &&
+        userPostMatch[2] &&
+        !['groups', 'events', 'watch', 'marketplace'].includes(userPostMatch[1])
+      ) {
+        return `https://www.facebook.com/${userPostMatch[1]}/posts/${userPostMatch[2]}/`;
+      }
+    } catch {
+      // Ignore URL parsing errors
+    }
+  }
+  return '';
+}
+
+async function processSingleDomElement(
+  el: ElementHandle<SVGElement | HTMLElement>,
+  sourceName: string,
+  seenUrls: Set<string>
+): Promise<boolean> {
+  try {
+    const text = await el.innerText().catch(() => '');
+    if (!text || text.trim().length < 35) return false;
+
+    let authorName = '';
+    const authorEl = await el.$(
+      'h2 a, h3 a, h4 a, a[role="link"] > span[dir="auto"], strong > span, a[attributionsrc] span, span[dir="auto"] strong'
+    );
+    if (authorEl) {
+      const nameText = (await authorEl.innerText().catch(() => '')).trim();
+      if (
+        nameText &&
+        nameText.length > 1 &&
+        !nameText.toLowerCase().includes('sponsored') &&
+        !nameText.toLowerCase().includes('suggested') &&
+        !nameText.toLowerCase().includes('anonymous')
+      ) {
+        authorName = nameText;
+      }
+    }
+
+    if (!authorName) {
+      authorName = extractAuthorFromText(text) || 'Facebook Group Member';
+    }
+
+    let postedTimeRaw: string | null = null;
+    const timeAnchors = await el.$$(
+      'a[role="link"][aria-label], a[href*="/posts/"][aria-label], a[href*="/permalink/"][aria-label], a[href*="story_fbid="][aria-label], a[aria-label]'
+    );
+    const ariaLabels = await Promise.all(timeAnchors.map((anchor) => anchor.getAttribute('aria-label')));
+    for (const label of ariaLabels) {
+      if (
+        label &&
+        (/\d/.test(label) ||
+          label.includes('Yesterday') ||
+          label.includes('ago') ||
+          label.includes('at') ||
+          label.includes('m') ||
+          label.includes('h') ||
+          label.includes('d'))
+      ) {
+        postedTimeRaw = label;
+        break;
+      }
+    }
+
+    if (!postedTimeRaw) {
+      const abbrEl = await el.$('abbr');
+      if (abbrEl) {
+        const [titleAttr, utimeAttr, abbrText] = await Promise.all([
+          abbrEl.getAttribute('title'),
+          abbrEl.getAttribute('data-utime'),
+          abbrEl.innerText().catch(() => ''),
+        ]);
+        postedTimeRaw = titleAttr || utimeAttr || abbrText;
+      }
+    }
+
+    if (/\b202[0-5]\b/.test(text.slice(0, 500)) || /\b\d+\s+(?:months?|years?)\s+ago\b/i.test(text.slice(0, 500))) {
+      return false;
+    }
+
+    if (!postedTimeRaw) {
+      const fromText = extractDateFromPostText(text);
+      if (fromText) {
+        const ageMillis = Date.now() - fromText.date.getTime();
+        if (ageMillis > 7 * 24 * 60 * 60 * 1000) return false;
+        postedTimeRaw = fromText.formattedIST;
+      }
+    }
+
+    let parsedDate = new Date();
+    let formattedPostedTime = 'Recently';
+
+    if (postedTimeRaw) {
+      const parsed = parseFacebookTimestamp(postedTimeRaw);
+      if (parsed) {
+        parsedDate = parsed.date;
+        formattedPostedTime = parsed.formattedIST;
+        const postAgeMillis = Date.now() - parsedDate.getTime();
+        const maxAgeMillis = 7 * 24 * 60 * 60 * 1000;
+        if (postAgeMillis > maxAgeMillis) return false;
+      }
+    }
+
+    const linkEls = await el.$$(
+      'a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid="], a[href*="multi_permalinks="], a[role="link"]'
+    );
+    const rawHrefs = await Promise.all(linkEls.map((link) => link.getAttribute('href')));
+    const postUrl = resolveCanonicalPostUrl(rawHrefs);
+
+    if (!postUrl || !postUrl.startsWith('https://www.facebook.com/') || postUrl.includes('fb_')) {
+      return false;
+    }
+
+    const imageUrls: string[] = [];
+    const seenImgSrcs = new Set<string>();
+    try {
+      const imgEls = await el.$$('img, [role="img"] img, div[class*="scaledImageFit"] img, a[href*="/photo"] img');
+      const imgSrcs = await Promise.all(imgEls.map((img) => img.getAttribute('src')));
+      for (const src of imgSrcs) {
+        if (
+          src &&
+          (src.includes('fbcdn') || src.includes('scontent') || src.startsWith('http')) &&
+          !src.includes('emoji') &&
+          !src.includes('rsrc.php') &&
+          !src.includes('static.xx') &&
+          !src.includes('/p48x48/') &&
+          !src.includes('/p50x50/') &&
+          !src.includes('/s100x100/') &&
+          !src.includes('/s150x150/') &&
+          !src.includes('/p160x160/')
+        ) {
+          if (!seenImgSrcs.has(src) && imageUrls.length < 10) {
+            seenImgSrcs.add(src);
+            imageUrls.push(src);
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+
+    if (seenUrls.has(postUrl)) return false;
+    seenUrls.add(postUrl);
+
+    const matchedListing = await processPost(
+      text,
+      sourceName,
+      authorName,
+      formattedPostedTime,
+      postUrl,
+      parsedDate.toISOString(),
+      undefined,
+      'new',
+      imageUrls
+    );
+
+    if (matchedListing) {
+      console.log(
+        `  ✨ Matched: [${matchedListing.score} pts] ${matchedListing.authorName} - ${matchedListing.entities.societyName || matchedListing.location} (${matchedListing.bhkType}) [${matchedListing.postedTime}]`
+      );
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Scrapes a single target Facebook source using a dedicated worker page.
  */
 async function scrapeSourceWorker(
   source: { name: string; url: string },
-  page: any,
+  page: Page,
   seenUrls: Set<string>
 ): Promise<{ scanned: number; matched: number }> {
-  let scanned = 0;
-  let matched = 0;
-
   try {
     console.log(`🔍 [Worker] Scraping: ${source.name}`);
     await page.goto(source.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
     await page.waitForTimeout(2500);
 
-    // Detect if redirected to dedicated login page or checkpoint
     const currentUrl = page.url();
     if (currentUrl.includes('/login.php') || currentUrl.includes('/checkpoint/')) {
       console.warn(`⚠️ [Worker] Facebook session invalid or login required for ${source.name}.`);
       return { scanned: 0, matched: 0 };
     }
 
-    // Dismiss any login or cookie modal overlay if present
     try {
-      const closeBtn = await page.$('div[aria-label="Close"], [aria-label="Decline optional cookies"], [aria-label="Allow all cookies"]');
+      const closeBtn = await page.$(
+        'div[aria-label="Close"], [aria-label="Decline optional cookies"], [aria-label="Allow all cookies"]'
+      );
       if (closeBtn) await closeBtn.click({ timeout: 1000 });
     } catch {
       // Ignore
     }
 
-    // Scroll 12 times smoothly to load deep virtualized feed content (covering 7-10 days)
-    for (let i = 0; i < 12; i++) {
-      await page.mouse.wheel(0, 1400);
-      await page.waitForTimeout(900);
+    await scrollFeedStep(page, 0, 12);
+    await expandSeeMoreButtons(page, 15);
 
-      // Expand visible "See more" text buttons on every 3rd scroll
-      if (i % 3 === 0) {
-        try {
-          const seeMoreButtons = await page.$$('div[role="button"]:has-text("See more"), span:has-text("See more")');
-          for (const btn of seeMoreButtons.slice(0, 8)) {
-            await btn.click({ timeout: 300 }).catch(() => {});
-          }
-        } catch {
-          // Ignore
-        }
-      }
-    }
-
-    // Final pass to expand remaining "See more" buttons
-    try {
-      const seeMoreButtons = await page.$$('div[role="button"]:has-text("See more"), span:has-text("See more")');
-      for (const btn of seeMoreButtons.slice(0, 15)) {
-        await btn.click({ timeout: 300 }).catch(() => {});
-      }
-    } catch {
-      // Ignore
-    }
-
-    // Two-Tier DOM Extraction:
-    // Tier 1: Primary semantic containers
     let elements = await page.$$(
       'div[data-pagelet*="Feed"] div[role="feed"] > div, [role="feed"] > div, [role="article"], div[data-ad-preview="message"], div[class*="x1yztbdb"]'
     );
 
-    // Tier 2: Anchor-Anchored fallback if primary container returns 0 elements
     if (!elements || elements.length === 0) {
-      const anchorParents = await page.$$eval(
+      const anchorCount = await page.$$eval(
         'a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid="]',
-        (anchors: any[]) => anchors.map((a: any) => a.closest('div[role="article"], div[role="main"] > div > div > div > div, div[class*="x1yztbdb"]')).filter(Boolean)
+        (anchors) =>
+          anchors
+            .map((a) =>
+              a.closest('div[role="article"], div[role="main"] > div > div > div > div, div[class*="x1yztbdb"]')
+            )
+            .filter(Boolean).length
       );
-      if (anchorParents && anchorParents.length > 0) {
+      if (anchorCount > 0) {
         elements = await page.$$('div[role="article"], div[role="main"] > div > div > div > div');
       }
     }
@@ -397,216 +601,33 @@ async function scrapeSourceWorker(
     const pageTitle = await page.title().catch(() => '');
     console.log(`🔍 [Worker] ${source.name} | DOM Elements: ${elements.length} | Title: "${pageTitle}" | URL: ${page.url()}`);
 
-    for (const el of elements) {
-      scanned++;
-      try {
-        const text = await el.innerText().catch(() => '');
-        if (!text || text.trim().length < 35) continue;
-
-        // 1. Author Name Extraction (Two-Tier Resolution)
-        let authorName = '';
-        const authorEl = await el.$(
-          'h2 a, h3 a, h4 a, a[role="link"] > span[dir="auto"], strong > span, a[attributionsrc] span, span[dir="auto"] strong'
-        );
-        if (authorEl) {
-          const nameText = (await authorEl.innerText().catch(() => '')).trim();
-          if (
-            nameText &&
-            nameText.length > 1 &&
-            !nameText.toLowerCase().includes('sponsored') &&
-            !nameText.toLowerCase().includes('suggested') &&
-            !nameText.toLowerCase().includes('anonymous')
-          ) {
-            authorName = nameText;
-          }
-        }
-
-        if (!authorName) {
-          authorName = extractAuthorFromText(text) || 'Facebook Group Member';
-        }
-
-        // 2. Exact Post Time & Absolute IST Conversion
-        let postedTimeRaw: string | null = null;
-        const timeAnchors = await el.$$(
-          'a[role="link"][aria-label], a[href*="/posts/"][aria-label], a[href*="/permalink/"][aria-label], a[href*="story_fbid="][aria-label], a[aria-label]'
-        );
-        for (const anchor of timeAnchors) {
-          const label = await anchor.getAttribute('aria-label');
-          if (label && (/\d/.test(label) || label.includes('Yesterday') || label.includes('ago') || label.includes('at') || label.includes('m') || label.includes('h') || label.includes('d'))) {
-            postedTimeRaw = label;
-            break;
-          }
-        }
-
-        if (!postedTimeRaw) {
-          const abbrEl = await el.$('abbr');
-          if (abbrEl) {
-            postedTimeRaw = (await abbrEl.getAttribute('title')) || (await abbrEl.getAttribute('data-utime')) || (await abbrEl.innerText().catch(() => ''));
-          }
-        }
-
-        // Reject past years (2020-2025) or older relative times anywhere in post header
-        if (/\b202[0-5]\b/.test(text.slice(0, 500)) || /\b\d+\s+(?:months?|years?)\s+ago\b/i.test(text.slice(0, 500))) {
-          continue;
-        }
-
-        if (!postedTimeRaw) {
-          const fromText = extractDateFromPostText(text);
-          if (fromText) {
-            const ageMillis = Date.now() - fromText.date.getTime();
-            if (ageMillis > 7 * 24 * 60 * 60 * 1000) continue;
-            postedTimeRaw = fromText.formattedIST;
-          }
-        }
-
-        // Timestamp handling: Parse if found; fallback to Recently / current date if Facebook obfuscated the DOM element
-        let parsedDate = new Date();
-        let formattedPostedTime = 'Recently';
-
-        if (postedTimeRaw) {
-          const parsed = parseFacebookTimestamp(postedTimeRaw);
-          if (parsed) {
-            parsedDate = parsed.date;
-            formattedPostedTime = parsed.formattedIST;
-            // 7-day cutoff for explicitly dated older posts
-            const postAgeMillis = Date.now() - parsedDate.getTime();
-            const maxAgeMillis = 7 * 24 * 60 * 60 * 1000;
-            if (postAgeMillis > maxAgeMillis) continue;
-          }
-        }
-
-        // 3. Exact Canonical Facebook Post Permalink Extraction
-        let postUrl = '';
-        const linkEls = await el.$$(
-          'a[href*="/posts/"], a[href*="/permalink/"], a[href*="story_fbid="], a[href*="multi_permalinks="], a[role="link"]'
-        );
-        for (const link of linkEls) {
-          const rawHref = await link.getAttribute('href');
-          if (!rawHref) continue;
-
-          const href = rawHref.startsWith('http') ? rawHref : `https://www.facebook.com${rawHref}`;
-
-          try {
-            const urlObj = new URL(href);
-            if (!urlObj.hostname.includes('facebook.com')) continue;
-
-            // Priority A: Search results with multi_permalinks query parameter
-            const multiPermalinks = urlObj.searchParams.get('multi_permalinks');
-            if (multiPermalinks && /^\d+$/.test(multiPermalinks)) {
-              const groupMatch = urlObj.pathname.match(/\/groups\/([^\/?#]+)/);
-              if (groupMatch) {
-                postUrl = `https://www.facebook.com/groups/${groupMatch[1]}/posts/${multiPermalinks}/`;
-                break;
-              }
-            }
-
-            // Priority B: Direct /groups/<groupId>/posts/<postId>
-            const postsMatch = urlObj.pathname.match(/\/groups\/([^\/?#]+)\/posts\/([^\/?#]+)/);
-            if (postsMatch) {
-              postUrl = `https://www.facebook.com/groups/${postsMatch[1]}/posts/${postsMatch[2]}/`;
-              break;
-            }
-
-            // Priority C: Direct /groups/<groupId>/permalink/<postId>
-            const permalinkMatch = urlObj.pathname.match(/\/groups\/([^\/?#]+)\/permalink\/([^\/?#]+)/);
-            if (permalinkMatch) {
-              postUrl = `https://www.facebook.com/groups/${permalinkMatch[1]}/posts/${permalinkMatch[2]}/`;
-              break;
-            }
-
-            // Priority D: /permalink.php?story_fbid=<postId>&id=<groupId>
-            if (urlObj.pathname.includes('permalink.php') && urlObj.searchParams.has('story_fbid')) {
-              const storyFbid = urlObj.searchParams.get('story_fbid');
-              const id = urlObj.searchParams.get('id');
-              if (storyFbid) {
-                postUrl = id
-                  ? `https://www.facebook.com/permalink.php?story_fbid=${storyFbid}&id=${id}`
-                  : `https://www.facebook.com/permalink.php?story_fbid=${storyFbid}`;
-                break;
-              }
-            }
-
-            // Priority E: Direct user / page posts /<user>/posts/<postId>
-            const userPostMatch = urlObj.pathname.match(/^\/([^\/?#]+)\/posts\/([^\/?#]+)/);
-            if (
-              userPostMatch &&
-              userPostMatch[1] &&
-              userPostMatch[2] &&
-              !['groups', 'events', 'watch', 'marketplace'].includes(userPostMatch[1])
-            ) {
-              postUrl = `https://www.facebook.com/${userPostMatch[1]}/posts/${userPostMatch[2]}/`;
-              break;
-            }
-          } catch {
-            // Ignore URL parsing errors
-          }
-        }
-
-        // INVARIANT: Never synthesize fallback URLs. If no authentic Facebook permalink was extracted, strictly drop the post.
-        if (!postUrl || !postUrl.startsWith('https://www.facebook.com/') || postUrl.includes('fb_')) {
-          continue;
-        }
-
-        // Extract photo attachments (up to 10 property images, excluding profile avatars & icons)
-        const imageUrls: string[] = [];
-        const seenImgSrcs = new Set<string>();
-        try {
-          // Extract from all image elements within the post element
-          const imgEls = await el.$$('img, [role="img"] img, div[class*="scaledImageFit"] img, a[href*="/photo"] img');
-          for (const img of imgEls) {
-            const src = await img.getAttribute('src');
-            if (
-              src &&
-              (src.includes('fbcdn') || src.includes('scontent') || src.startsWith('http')) &&
-              !src.includes('emoji') &&
-              !src.includes('rsrc.php') &&
-              !src.includes('static.xx') &&
-              !src.includes('/p48x48/') &&
-              !src.includes('/p50x50/') &&
-              !src.includes('/s100x100/') &&
-              !src.includes('/s150x150/') &&
-              !src.includes('/p160x160/')
-            ) {
-              if (!seenImgSrcs.has(src) && imageUrls.length < 10) {
-                seenImgSrcs.add(src);
-                imageUrls.push(src);
-              }
-            }
-          }
-        } catch {
-          // Ignore
-        }
-
-        // Atomic deduplication check
-        if (seenUrls.has(postUrl)) continue;
-        seenUrls.add(postUrl);
-
-        const matchedListing = await processPost(
-          text,
-          source.name,
-          authorName,
-          formattedPostedTime,
-          postUrl,
-          parsedDate.toISOString(),
-          undefined,
-          'new',
-          imageUrls
-        );
-
-        if (matchedListing) {
-          matched++;
-          console.log(`  ✨ Matched: [${matchedListing.score} pts] ${matchedListing.authorName} - ${matchedListing.entities.societyName || matchedListing.location} (${matchedListing.bhkType}) [${matchedListing.postedTime}]`);
-        }
-      } catch {
-        // Skip broken elements
-      }
-    }
+    const matchResults = await Promise.all(
+      elements.map((el) => processSingleDomElement(el, source.name, seenUrls))
+    );
+    return {
+      scanned: elements.length,
+      matched: matchResults.filter(Boolean).length,
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`⚠️ [Worker] Error on ${source.name}:`, message);
+    return { scanned: 0, matched: 0 };
   }
+}
 
-  return { scanned, matched };
+async function drainSourcesQueue(
+  sourcesQueue: Array<{ name: string; url: string }>,
+  page: Page,
+  seenUrls: Set<string>,
+  acc: { scanned: number; matched: number } = { scanned: 0, matched: 0 }
+): Promise<{ scanned: number; matched: number }> {
+  const source = sourcesQueue.shift();
+  if (!source) return acc;
+  const res = await scrapeSourceWorker(source, page, seenUrls);
+  return drainSourcesQueue(sourcesQueue, page, seenUrls, {
+    scanned: acc.scanned + res.scanned,
+    matched: acc.matched + res.matched,
+  });
 }
 
 /**
@@ -631,7 +652,6 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
 
   console.log('🔄 [Rental Radar] Starting Facebook Ingestion Cycle...');
 
-  // Playwright 4-Worker Concurrent Browser Pool
   if (hasExistingSession()) {
     try {
       const context = await createPersistentContext(headless);
@@ -643,16 +663,9 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
       const workerPromises = Array.from({ length: NUM_WORKERS }, async () => {
         const page = await context.newPage();
         await enableFastNetworkInterception(page);
-
-        while (sourcesQueue.length > 0) {
-          const source = sourcesQueue.shift();
-          if (!source) break;
-
-          const res = await scrapeSourceWorker(source, page, seenUrls);
-          scannedCount += res.scanned;
-          matchedCount += res.matched;
-        }
-
+        const workerTotals = await drainSourcesQueue(sourcesQueue, page, seenUrls);
+        scannedCount += workerTotals.scanned;
+        matchedCount += workerTotals.matched;
         await page.close().catch(() => {});
       });
 
@@ -673,6 +686,7 @@ export async function runScrapeCycle(headless: boolean = true): Promise<{
   await listingRepository.logScrapeRun(finalStatus, scannedCount, matchedCount);
   return { status: finalStatus, scanned: scannedCount, matched: matchedCount };
 }
+
 
 
 

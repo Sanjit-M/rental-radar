@@ -1,103 +1,128 @@
 import { Hono } from 'hono';
-import { listingRepository } from '../../db/repository';
+import { Effect, Either } from 'effect';
+import {
+  GroupRepository,
+  GroupRepositoryLive,
+  GroupNotFoundError,
+} from '../../domain/services/RepositoryService';
 import { makeGroupId } from '../../domain/types';
 
 export const groupsRouter = new Hono();
 
 groupsRouter.get('/', async (c) => {
-  try {
-    const groups = await listingRepository.getGroups();
-    return c.json(groups);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch groups';
-    return c.json({ error: message, groups: [] }, 500);
+  const program = Effect.gen(function* () {
+    const repo = yield* GroupRepository;
+    return yield* repo.getGroups();
+  }).pipe(Effect.either, Effect.provide(GroupRepositoryLive));
+
+  const result = await Effect.runPromise(program);
+  if (Either.isLeft(result)) {
+    return c.json({ error: result.left.message || 'Failed to fetch groups', groups: [] }, 500);
   }
+
+  return c.json(result.right);
 });
 
 groupsRouter.post('/', async (c) => {
+  let body: {
+    id?: string;
+    name?: string;
+    url?: string;
+    memberCount?: string;
+    category?: string;
+    enabled?: boolean;
+  };
   try {
-    const body = await c.req.json<{
-      id?: string;
-      name?: string;
-      url?: string;
-      memberCount?: string;
-      category?: string;
-      enabled?: boolean;
-    }>();
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON payload' }, 400);
+  }
 
-    if (!body.name || !body.url) {
-      return c.json({ error: 'Both name and url are required' }, 400);
-    }
+  if (!body.name || !body.url) {
+    return c.json({ error: 'Both name and url are required' }, 400);
+  }
 
-    const id = makeGroupId(
-      body.id ||
-        body.name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '_')
-          .replace(/^_|_$/g, '')
-    );
+  const name = body.name;
+  const url = body.url;
+  const id = makeGroupId(
+    body.id ||
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '')
+  );
 
-    const group = await listingRepository.upsertGroup({
+  const program = Effect.gen(function* () {
+    const repo = yield* GroupRepository;
+    return yield* repo.upsertGroup({
       id,
-      name: body.name,
-      url: body.url,
+      name,
+      url,
       memberCount: body.memberCount || '',
       category: body.category || 'Rental & Flatmates',
       enabled: body.enabled ?? true,
       listingsCount: 0,
       lastScrapedAt: null,
     });
+  }).pipe(Effect.either, Effect.provide(GroupRepositoryLive));
 
-    return c.json({ success: true, group }, 201);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to upsert group';
-    return c.json({ error: message }, 500);
+  const result = await Effect.runPromise(program);
+  if (Either.isLeft(result)) {
+    return c.json({ error: result.left.message || 'Failed to upsert group' }, 500);
   }
+
+  return c.json({ success: true, group: result.right }, 201);
 });
 
 groupsRouter.patch('/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!id) {
+    return c.json({ error: 'Invalid group ID' }, 400);
+  }
+
+  let requestedEnabled: boolean | undefined;
   try {
-    const id = c.req.param('id');
-    if (!id) {
-      return c.json({ error: 'Invalid group ID' }, 400);
+    const body = await c.req.json<{ enabled?: boolean }>();
+    if (typeof body.enabled === 'boolean') {
+      requestedEnabled = body.enabled;
     }
+  } catch {
+    // Allow empty body to toggle
+  }
 
-    let requestedEnabled: boolean | undefined;
-    try {
-      const body = await c.req.json<{ enabled?: boolean }>();
-      if (typeof body.enabled === 'boolean') {
-        requestedEnabled = body.enabled;
+  const program = Effect.gen(function* () {
+    const repo = yield* GroupRepository;
+    let nextEnabled = requestedEnabled;
+    if (nextEnabled === undefined) {
+      const existingGroups = yield* repo.getGroups();
+      const existing = existingGroups.find((g) => g.id === id);
+      if (!existing) {
+        return yield* Effect.fail(
+          new GroupNotFoundError({ id, message: `Facebook group "${id}" not found` })
+        );
       }
-    } catch {
-      // Allow empty body to toggle
+      nextEnabled = !existing.enabled;
     }
 
-    const existingGroups = await listingRepository.getGroups();
-    const existing = existingGroups.find((g) => g.id === id);
-
-    const nextEnabled =
-      requestedEnabled !== undefined
-        ? requestedEnabled
-        : existing
-          ? !existing.enabled
-          : false;
-
-    const updated = await listingRepository.toggleGroup(id, nextEnabled);
-    if (!updated) {
-      return c.json({ error: 'Group not found' }, 404);
-    }
-
-    const refreshedGroups = await listingRepository.getGroups();
+    yield* repo.toggleGroup(id, nextEnabled);
+    const refreshedGroups = yield* repo.getGroups();
     const updatedGroup = refreshedGroups.find((g) => g.id === id);
 
-    return c.json({
-      success: true,
+    return {
+      success: true as const,
       id,
       enabled: nextEnabled,
       group: updatedGroup,
-    });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to update group';
-    return c.json({ error: message }, 500);
+    };
+  }).pipe(Effect.either, Effect.provide(GroupRepositoryLive));
+
+  const result = await Effect.runPromise(program);
+  if (Either.isLeft(result)) {
+    if (result.left._tag === 'GroupNotFoundError') {
+      return c.json({ error: 'Group not found' }, 404);
+    }
+    return c.json({ error: result.left.message || 'Failed to update group' }, 500);
   }
+
+  return c.json(result.right);
 });

@@ -57,6 +57,16 @@ export function generatePostId(groupName: string, authorName: string, text: stri
   return makeFbPostId(`fb_${Math.abs(hash).toString(36)}`);
 }
 
+const IST_DATE_FORMATTER = new Intl.DateTimeFormat('en-IN', {
+  timeZone: 'Asia/Kolkata',
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: true,
+});
+
 /**
  * Formats a JavaScript Date into an exact Indian Standard Time (IST) string.
  * Example: "27 Aug 2026, 01:15 AM IST"
@@ -65,16 +75,7 @@ export function generatePostId(groupName: string, authorName: string, text: stri
  * @returns Formatted string in Indian Standard Time with IST suffix.
  */
 export function formatToIST(date: Date): string {
-  const options: Intl.DateTimeFormatOptions = {
-    timeZone: 'Asia/Kolkata',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  };
-  return new Intl.DateTimeFormat('en-IN', options).format(date) + ' IST';
+  return IST_DATE_FORMATTER.format(date) + ' IST';
 }
 
 /**

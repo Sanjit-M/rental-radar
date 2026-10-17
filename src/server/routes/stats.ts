@@ -1,14 +1,20 @@
 import { Hono } from 'hono';
-import { listingRepository } from '../../db/repository';
+import { Effect, Either } from 'effect';
+import {
+  ListingRepository,
+  ListingRepositoryLive,
+} from '../../domain/services/RepositoryService';
 
 export const statsRouter = new Hono();
 
 statsRouter.get('/', async (c) => {
-  try {
-    const stats = await listingRepository.getStats();
-    return c.json(stats);
-  } catch (err: any) {
-    console.error('Error fetching stats:', err);
+  const program = Effect.gen(function* () {
+    const repo = yield* ListingRepository;
+    return yield* repo.getStats();
+  }).pipe(Effect.either, Effect.provide(ListingRepositoryLive));
+
+  const result = await Effect.runPromise(program);
+  if (Either.isLeft(result)) {
     return c.json({
       totalListings: 0,
       unicornMatches: 0,
@@ -19,7 +25,9 @@ statsRouter.get('/', async (c) => {
       poolCount: 0,
       directOwnerCount: 0,
       lastScrapeTime: null,
-      error: err.message,
+      error: result.left.message,
     });
   }
+
+  return c.json(result.right);
 });

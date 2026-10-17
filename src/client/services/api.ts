@@ -388,9 +388,9 @@ export const api = {
         { headers: getHeaders() },
         (raw) => {
           const decoded = decodeGroups(raw);
-          const groups: FbGroup[] = Array.isArray(decoded)
-            ? [...decoded]
-            : [...decoded.groups];
+          const groups: FbGroup[] = 'groups' in decoded
+            ? [...decoded.groups]
+            : [...decoded];
           return {
             count: groups.length,
             groups,
@@ -445,9 +445,9 @@ export const api = {
         { headers: getHeaders() },
         (raw) => {
           const decoded = decodePlaces(raw);
-          const places: BangalorePlaceSummary[] = Array.isArray(decoded)
-            ? [...decoded]
-            : [...decoded.places];
+          const places: BangalorePlaceSummary[] = 'places' in decoded
+            ? [...decoded.places]
+            : [...decoded];
           return {
             count: places.length,
             places,
