@@ -2,6 +2,7 @@ import { Context, Effect, Layer, Data } from 'effect';
 import {
   RentalListing,
   DashboardStats,
+  ScrapeLogEntry,
   UserListingStatus,
   PaginatedListingsResponse,
   FbGroup,
@@ -52,6 +53,10 @@ export interface ListingRepositoryService {
   ) => Effect.Effect<boolean, RepositoryError>;
 
   readonly getStats: () => Effect.Effect<DashboardStats, RepositoryError>;
+
+  readonly getScrapeLogs: (
+    limit?: number
+  ) => Effect.Effect<ScrapeLogEntry[], RepositoryError>;
 
   readonly getPlacesDirectory: () => Effect.Effect<BangalorePlaceSummary[], RepositoryError>;
 
@@ -151,6 +156,18 @@ const makeListingRepositoryLive: Effect.Effect<ListingRepositoryService> = Effec
       catch: (cause) =>
         new RepositoryError({
           operation: 'getStats',
+          message: cause instanceof Error ? cause.message : String(cause),
+          cause,
+        }),
+    });
+  }),
+
+  getScrapeLogs: Effect.fn('ListingRepository.getScrapeLogs')(function* (limit = 20) {
+    return yield* Effect.tryPromise({
+      try: () => listingRepository.getScrapeLogs(limit),
+      catch: (cause) =>
+        new RepositoryError({
+          operation: 'getScrapeLogs',
           message: cause instanceof Error ? cause.message : String(cause),
           cause,
         }),
@@ -336,8 +353,12 @@ export function createListingRepositoryMemory(
             poolCount: all.filter((l) => l.entities.hasSwimmingPool).length,
             directOwnerCount: all.filter((l) => !l.entities.isBrokerage).length,
             lastScrapeTime: null,
+            scrapeLogs: [],
           };
         }),
+
+      getScrapeLogs: (limit = 20) =>
+        Effect.sync(() => ([] as ScrapeLogEntry[]).slice(0, limit)),
 
       getPlacesDirectory: () =>
         Effect.sync(() => {

@@ -428,6 +428,118 @@ func (s *Store) QueryTursoCount(table string) (int, error) {
 	return 0, nil
 }
 
+// PullGroupsFromTurso fetches all fb_groups rows from Turso Cloud and upserts them into local SQLite,
+// preserving enabled flags, listings_count, and last_scraped_at across ephemeral runners.
+func (s *Store) PullGroupsFromTurso() (int, error) {
+	if !s.HasTurso() {
+		return 0, nil
+	}
+	stmt := TursoStmt{
+		SQL: "SELECT id, name, url, COALESCE(member_count, ''), category, enabled, listings_count, COALESCE(last_scraped_at, '') FROM fb_groups",
+	}
+	payload, err := json.Marshal(tursoPipelineReq{
+		Requests: []tursoReqItem{
+			{Type: "execute", Stmt: &stmt},
+			{Type: "close"},
+		},
+	})
+	if err != nil {
+		return 0, err
+	}
+	req, err := http.NewRequest("POST", s.tursoURL+"/v2/pipeline", bytes.NewReader(payload))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+s.tursoToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return 0, fmt.Errorf("turso HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	var parsed tursoPipelineResp
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return 0, err
+	}
+	if len(parsed.Results) == 0 || parsed.Results[0].Response == nil || parsed.Results[0].Response.Result == nil {
+		return 0, nil
+	}
+
+	rows := parsed.Results[0].Response.Result.Rows
+	if len(rows) == 0 {
+		return 0, nil
+	}
+
+	var localBuf strings.Builder
+	localBuf.WriteString("BEGIN TRANSACTION;\n")
+	count := 0
+	for _, r := range rows {
+		if len(r) < 8 {
+			continue
+		}
+		id := tursoCellStr(r[0].Value)
+		name := tursoCellStr(r[1].Value)
+		url := tursoCellStr(r[2].Value)
+		memberCount := tursoCellStr(r[3].Value)
+		category := tursoCellStr(r[4].Value)
+		enabled := tursoCellInt(r[5].Value)
+		listingsCount := tursoCellInt(r[6].Value)
+		lastScrapedAt := tursoCellStr(r[7].Value)
+		if id == "" || name == "" {
+			continue
+		}
+		localBuf.WriteString(fmt.Sprintf(
+			"INSERT INTO fb_groups (id, name, url, member_count, category, enabled, listings_count, last_scraped_at, updated_at) VALUES (%s, %s, %s, %s, %s, %d, %d, %s, datetime('now')) ON CONFLICT(id) DO UPDATE SET name=excluded.name, url=excluded.url, member_count=CASE WHEN excluded.member_count != '' THEN excluded.member_count ELSE fb_groups.member_count END, category=excluded.category, enabled=excluded.enabled, listings_count=MAX(fb_groups.listings_count, excluded.listings_count), last_scraped_at=coalesce(excluded.last_scraped_at, fb_groups.last_scraped_at), updated_at=datetime('now');\n",
+			sqlStr(id), sqlStr(name), sqlStr(url), sqlStr(memberCount), sqlStr(category), enabled, listingsCount, sqlNullableStr(lastScrapedAt),
+		))
+		count++
+	}
+	localBuf.WriteString("COMMIT;\n")
+
+	if count == 0 {
+		return 0, nil
+	}
+	if err := s.ExecLocal(localBuf.String()); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func tursoCellStr(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case float64:
+		return strconv.FormatInt(int64(val), 10)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+func tursoCellInt(v any) int {
+	if v == nil {
+		return 0
+	}
+	switch val := v.(type) {
+	case string:
+		n, _ := strconv.Atoi(val)
+		return n
+	case float64:
+		return int(val)
+	default:
+		return 0
+	}
+}
+
 // SeedCuratedGroups seeds the 29 curated Bangalore rental groups into fb_groups.
 func (s *Store) SeedCuratedGroups() (int, error) {
 	var groups []FBGroup
@@ -750,6 +862,10 @@ func (s *Store) BackfillAndSync() (*SyncStats, error) {
 		return nil, err
 	}
 
+	if s.HasTurso() {
+		_, _ = s.PullGroupsFromTurso()
+	}
+
 	if _, err := s.SeedCuratedGroups(); err != nil {
 		return nil, err
 	}
@@ -830,10 +946,10 @@ func (s *Store) BackfillAndSync() (*SyncStats, error) {
 		return nil, err
 	}
 
-	// Update listings_count in fb_groups
-	countUpdateSQL := `UPDATE fb_groups SET listings_count = (
+	// Update listings_count in fb_groups without zeroing out counts on ephemeral runners
+	countUpdateSQL := `UPDATE fb_groups SET listings_count = MAX(listings_count, (
 		SELECT COUNT(*) FROM listings WHERE listings.group_id = fb_groups.id OR listings.group_name = fb_groups.name
-	);`
+	));`
 	_ = s.ExecLocal(countUpdateSQL)
 	if s.HasTurso() {
 		_ = s.ExecTursoBatch([]TursoStmt{{SQL: countUpdateSQL}}, true)

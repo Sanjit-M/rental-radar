@@ -272,11 +272,11 @@ func RunScrape(ctx context.Context, cfg *config.Config, store *storage.Store, op
 		return nil, err
 	}
 
-	groups, err := store.GetGroups(true)
-	if err != nil || len(groups) == 0 {
-		_, _ = store.SeedCuratedGroups()
-		groups, _ = store.GetGroups(true)
+	if store.HasTurso() {
+		_, _ = store.PullGroupsFromTurso()
 	}
+	_, _ = store.SeedCuratedGroups()
+	groups, _ := store.GetGroups(true)
 	if opts.LimitGroups > 0 && len(groups) > opts.LimitGroups {
 		groups = groups[:opts.LimitGroups]
 	}
@@ -294,11 +294,12 @@ func RunScrape(ctx context.Context, cfg *config.Config, store *storage.Store, op
 	close(queue)
 
 	var (
-		mu         sync.Mutex
-		scanned    int
-		candidates []dedup.Candidate
-		records    []storage.ListingRecord
-		wg         sync.WaitGroup
+		mu            sync.Mutex
+		scanned       int
+		lastPageTitle string
+		candidates    []dedup.Candidate
+		records       []storage.ListingRecord
+		wg            sync.WaitGroup
 	)
 
 	workerCount := opts.Workers
@@ -349,11 +350,23 @@ func RunScrape(ctx context.Context, cfg *config.Config, store *storage.Store, op
 
 				rawJSON, err := tab.EvalString(ctx, jsExtractFeedPosts)
 				if err != nil || rawJSON == "" {
+					if pageTitle, tErr := tab.EvalString(ctx, "document.title || location.href"); tErr == nil && pageTitle != "" {
+						mu.Lock()
+						lastPageTitle = pageTitle
+						mu.Unlock()
+					}
 					continue
 				}
 				var posts []rawDOMPost
 				if err := json.Unmarshal([]byte(rawJSON), &posts); err != nil {
 					continue
+				}
+				if len(posts) == 0 {
+					if pageTitle, tErr := tab.EvalString(ctx, "document.title || location.href"); tErr == nil && pageTitle != "" {
+						mu.Lock()
+						lastPageTitle = pageTitle
+						mu.Unlock()
+					}
 				}
 
 				now := time.Now()
@@ -477,10 +490,15 @@ func RunScrape(ctx context.Context, cfg *config.Config, store *storage.Store, op
 	}
 
 	status := "success"
+	errMsg := ""
 	if scanned == 0 {
 		status = "no_posts_found"
+		if lastPageTitle == "" {
+			lastPageTitle = "unknown"
+		}
+		errMsg = fmt.Sprintf("0 posts extracted (page title: %s — Facebook may require residential IP / fresh cookies)", lastPageTitle)
 	}
-	_ = store.LogScrapeRun(status, scanned, len(records), len(groups), "")
+	_ = store.LogScrapeRun(status, scanned, len(records), len(groups), errMsg)
 
 	return &ScrapeSummary{
 		GroupsScanned: len(groups),

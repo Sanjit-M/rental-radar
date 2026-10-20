@@ -5,10 +5,15 @@ on:
     # Runs 3x daily at 09:00 AM, 03:00 PM, and 09:00 PM IST (03:30, 09:30, 15:30 UTC)
     - cron: '30 3,9,15 * * *'
   workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner label (ubuntu-latest or self-hosted)'
+        required: false
+        default: 'ubuntu-latest'
 
 jobs:
   scrape-and-sync:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     timeout-minutes: 15
 
     steps:
@@ -39,5 +44,5 @@ jobs:
           FB_SESSION_STORAGE: ${{ secrets.FB_SESSION_STORAGE }}
         run: |
           ./bin/radar-scraper sync
-          ./bin/radar-scraper run --workers=4 --limit-groups=10 --headless=true
+          ./bin/radar-scraper run --workers=4 --limit-groups=15 --headless=true
           ./bin/radar-scraper sync

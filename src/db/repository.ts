@@ -19,6 +19,7 @@ import {
   BHKType,
   FurnishingStatus,
   DashboardStats,
+  ScrapeLogEntry,
   ListingId,
   PaginatedListingsResponse,
   FbGroup,
@@ -131,6 +132,18 @@ export interface RawFbGroupRow {
   last_scraped_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RawScrapeLogRow {
+  id: number;
+  ran_at?: string | null;
+  run_at?: string | null;
+  groups_scanned?: number | null;
+  items_scanned: number;
+  items_matched: number;
+  status: string;
+  error_message: string | null;
+  duration_ms?: number | null;
 }
 
 function isBangaloreZone(value: unknown): value is BangaloreZone {
@@ -317,7 +330,7 @@ function buildOrderClause(sortBy?: string): string {
     case 'commute_asc':
       return ' ORDER BY two_way_avg_peak_mins ASC';
     case 'newest':
-      return ' ORDER BY created_at DESC';
+      return ' ORDER BY created_at DESC, id DESC';
     case 'score_desc':
     default:
       return ' ORDER BY score DESC, created_at DESC';
@@ -476,9 +489,6 @@ export const listingRepository = {
   },
 
   async getPaginatedListings(options: ListingQueryOptions = {}): Promise<PaginatedListingsResponse> {
-    // 0. Continuous 7-Day Auto-Retention Cleanup per Q3 (Option A)
-    await this.deleteListingsOlderThan(7).catch(() => {});
-
     const page = Math.max(1, typeof options.page === 'number' && !isNaN(options.page) ? options.page : 1);
     const limit = Math.min(100, Math.max(1, typeof options.limit === 'number' && !isNaN(options.limit) ? options.limit : 12));
     const offset = (page - 1) * limit;
@@ -517,7 +527,6 @@ export const listingRepository = {
   },
 
   async getListings(options: ListingQueryOptions = {}): Promise<RentalListing[]> {
-    await this.deleteListingsOlderThan(7).catch(() => {});
     const { whereSql, params } = buildWhereClause(options);
     const orderSql = buildOrderClause(options.sortBy);
 
@@ -558,8 +567,29 @@ export const listingRepository = {
     return res.changes > 0;
   },
 
+  async getScrapeLogs(limit = 20): Promise<ScrapeLogEntry[]> {
+    const safeLimit = Math.min(100, Math.max(1, Number.isFinite(limit) ? Math.floor(limit) : 20));
+    try {
+      const rows = await db.query<RawScrapeLogRow>(
+        'SELECT * FROM scrape_logs ORDER BY id DESC LIMIT ?',
+        [safeLimit]
+      );
+      return rows.map((row) => ({
+        id: Number(row.id),
+        runAt: String(row.run_at || row.ran_at || ''),
+        groupsScanned: Number(row.groups_scanned || 0),
+        itemsScanned: Number(row.items_scanned || 0),
+        itemsMatched: Number(row.items_matched || 0),
+        status: String(row.status || 'unknown'),
+        errorMessage: row.error_message ? String(row.error_message) : null,
+        durationMs: Number(row.duration_ms || 0),
+      }));
+    } catch {
+      return [];
+    }
+  },
+
   async getStats(): Promise<DashboardStats> {
-    await this.deleteListingsOlderThan(7).catch(() => {});
     const statsRow = await db.queryOne<Record<string, number | null>>(`
       SELECT 
         COUNT(*) as total_listings,
@@ -574,9 +604,25 @@ export const listingRepository = {
     `);
     const row = statsRow || {};
 
-    const lastLogRow = await db.queryOne<{ ran_at?: string }>(
-      'SELECT ran_at FROM scrape_logs ORDER BY ran_at DESC LIMIT 1'
-    );
+    const scrapeLogs = await this.getScrapeLogs(15);
+
+    let lastScrapeTime: string | null = null;
+    try {
+      const successLogRow = await db.queryOne<{ last_time?: string | null }>(
+        "SELECT MAX(ran_at) as last_time FROM scrape_logs WHERE items_matched > 0 OR status = 'success'"
+      );
+      if (successLogRow?.last_time) {
+        lastScrapeTime = successLogRow.last_time;
+      } else {
+        const fallbackLogRow = await db.queryOne<{ last_time?: string | null }>(
+          'SELECT MAX(ran_at) as last_time FROM scrape_logs'
+        );
+        lastScrapeTime = fallbackLogRow?.last_time || null;
+      }
+    } catch {
+      const latestSuccess = scrapeLogs.find((l) => l.itemsMatched > 0 || l.status === 'success');
+      lastScrapeTime = latestSuccess?.runAt || scrapeLogs[0]?.runAt || null;
+    }
 
     return {
       totalListings: Number(row.total_listings || 0),
@@ -587,7 +633,8 @@ export const listingRepository = {
       gatedCount: Number(row.gated_count || 0),
       poolCount: Number(row.pool_count || 0),
       directOwnerCount: Number(row.direct_owner_count || 0),
-      lastScrapeTime: lastLogRow?.ran_at || null,
+      lastScrapeTime,
+      scrapeLogs,
     };
   },
 

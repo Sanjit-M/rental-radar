@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type {
   RentalListing,
-  DashboardStats,
   UserListingStatus,
   SortBy,
 } from '../domain/types';
+import { HeaderStats } from './components/HeaderStats';
 import { FilterBar } from './components/FilterBar';
 import { CorridorFilter, BANGALORE_CORRIDORS } from './components/CorridorFilter';
 import { ListingCard } from './components/ListingCard';
@@ -17,119 +17,84 @@ import { QuickIngestModal } from './components/QuickIngestModal';
 import { GroupsDirectoryView } from './components/GroupsDirectoryView';
 import { PlacesDirectoryView } from './components/PlacesDirectoryView';
 import { ToastStack, toast } from './components/ToastStack';
-import { api } from './services/api';
+import { api, type DashboardStatsWithLogs, type ScrapeLogEntry } from './services/api';
 import {
-  Compass,
-  RefreshCw,
   Sparkles,
-  Building,
   Clock,
-  Waves,
-  IndianRupee,
   Layers,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
   Loader2,
-  PlusCircle,
-  Search,
   Users,
   MapPin,
+  Activity,
+  Calendar,
 } from 'lucide-react';
 
 export type WorkspaceTab = 'listings' | 'groups' | 'places';
 type ScrapePhase = 'idle' | 'running' | 'completed' | 'error';
 
-interface AppHeaderProps {
-  readonly scrapePhase: ScrapePhase;
-  readonly onOpenCommandPalette: () => void;
-  readonly onOpenIngestModal: () => void;
-  readonly onTriggerScrape: () => void;
-}
+const IST_DATE_BUCKET_FORMATTER = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'Asia/Kolkata',
+});
 
-const AppHeader: React.FC<AppHeaderProps> = ({
-  scrapePhase,
-  onOpenCommandPalette,
-  onOpenIngestModal,
-  onTriggerScrape,
-}) => {
-  return (
-    <header className="bg-[#11131A]/95 p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-white/[0.08] shadow-2xl">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
-          <Compass className="w-7 h-7 text-slate-950" />
-        </div>
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">
-              Bangalore Rental Radar
-            </h1>
-            <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-              City-Wide v3
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Daily Facebook group scraper, Google Maps place resolver & Peak PTP Scooter Commute ranker
-          </p>
-        </div>
-      </div>
+const IST_EXACT_TIME_FORMATTER = new Intl.DateTimeFormat('en-IN', {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: true,
+  timeZone: 'Asia/Kolkata',
+});
 
-      <div className="flex items-center gap-2.5 w-full md:w-auto justify-end flex-wrap">
-        <button
-          type="button"
-          onClick={onOpenCommandPalette}
-          className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs bg-[#090A0F] hover:bg-white/[0.06] text-slate-300 hover:text-white border border-white/[0.08] hover:border-emerald-500/50 shadow-lg transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
-          title="Open Command Palette (Cmd+K / Ctrl+K)"
-        >
-          <Search className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Commands</span>
-          <kbd className="hidden sm:inline px-1.5 py-0.5 text-[10px] font-mono bg-slate-950 text-slate-400 rounded border border-slate-800">
-            ⌘K
-          </kbd>
-        </button>
+/**
+ * Parses a listing's `createdAt` timestamp into IST day-bucket and exact time labels.
+ */
+function formatListingDayBucket(
+  createdAt: string,
+  postedTime: string,
+): {
+  readonly bucketLabel: string;
+  readonly exactTimeIST: string;
+  readonly relativeLabel: string;
+} {
+  const normalized = createdAt.includes('T')
+    ? createdAt
+    : `${createdAt.replace(' ', 'T')}Z`;
+  const parsed = new Date(normalized);
 
-        <button
-          type="button"
-          onClick={onOpenIngestModal}
-          className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs bg-[#090A0F] hover:bg-white/[0.06] text-cyan-400 border border-cyan-500/30 shadow-lg shadow-cyan-500/10 transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
-        >
-          <PlusCircle className="w-3.5 h-3.5" />
-          <span>Test / Ingest Post</span>
-        </button>
+  if (Number.isNaN(parsed.getTime())) {
+    return {
+      bucketLabel: 'Recent Posts',
+      exactTimeIST: createdAt,
+      relativeLabel: postedTime,
+    };
+  }
 
-        <button
-          type="button"
-          onClick={onTriggerScrape}
-          disabled={scrapePhase === 'running'}
-          className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-bold text-xs shadow-lg transition-[background-color,box-shadow,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
-            scrapePhase === 'completed'
-              ? 'bg-emerald-600 text-white shadow-emerald-500/20'
-              : scrapePhase === 'running'
-                ? 'bg-amber-400 text-slate-950 shadow-amber-500/20'
-                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'
-          } disabled:cursor-not-allowed`}
-        >
-          {scrapePhase === 'running' ? (
-            <>
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Scraping Groups (Live)...</span>
-            </>
-          ) : scrapePhase === 'completed' ? (
-            <>
-              <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-              <span>Scrape Complete ✓</span>
-            </>
-          ) : (
-            <>
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Check Groups Now</span>
-            </>
-          )}
-        </button>
-      </div>
-    </header>
+  const dateStr = IST_DATE_BUCKET_FORMATTER.format(parsed);
+  const now = new Date();
+  const todayStr = IST_DATE_BUCKET_FORMATTER.format(now);
+  const yesterdayStr = IST_DATE_BUCKET_FORMATTER.format(
+    new Date(now.getTime() - 86_400_000),
   );
-};
+
+  let bucketLabel = dateStr;
+  if (dateStr === todayStr) {
+    bucketLabel = `Today — ${dateStr}`;
+  } else if (dateStr === yesterdayStr) {
+    bucketLabel = `Yesterday — ${dateStr}`;
+  }
+
+  return {
+    bucketLabel,
+    exactTimeIST: `${IST_EXACT_TIME_FORMATTER.format(parsed)} IST`,
+    relativeLabel: postedTime,
+  };
+}
 
 const ScrapeNoticeBanner: React.FC<{
   readonly scrapeNotice: string | null;
@@ -140,12 +105,12 @@ const ScrapeNoticeBanner: React.FC<{
 
   return (
     <div
-      className={`bg-[#11131A] p-3.5 rounded-2xl text-xs flex items-center justify-between border shadow-lg ${
+      className={`bg-[#111114] px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-between border ${
         scrapePhase === 'error'
-          ? 'border-rose-500/40 bg-rose-950/40 text-rose-300'
+          ? 'border-rose-500/40 bg-rose-950/30 text-rose-300'
           : scrapePhase === 'running'
-            ? 'border-amber-500/40 bg-amber-950/40 text-amber-300'
-            : 'border-emerald-500/40 bg-emerald-950/40 text-emerald-300'
+            ? 'border-amber-500/40 bg-amber-950/30 text-amber-300'
+            : 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
       }`}
     >
       <div className="flex items-center gap-2">
@@ -161,7 +126,7 @@ const ScrapeNoticeBanner: React.FC<{
         type="button"
         aria-label="Dismiss scrape notification"
         onClick={onDismiss}
-        className="text-slate-400 hover:text-white font-bold ml-4"
+        className="text-zinc-400 hover:text-zinc-100 font-semibold ml-4"
       >
         ✕
       </button>
@@ -173,12 +138,28 @@ interface WorkspaceTabsBarProps {
   readonly activeTab: WorkspaceTab;
   readonly onSelectTab: (tab: WorkspaceTab) => void;
   readonly totalListingsCount: number;
+  readonly sortBy: SortBy;
+  readonly onSortByChange: (sort: SortBy) => void;
+  readonly minScore: number;
+  readonly onMinScoreChange: (score: number) => void;
+  readonly zeroBrokerageOnly: boolean;
+  readonly onToggleZeroBrokerage: () => void;
+  readonly bhkType: string;
+  readonly onBhkTypeChange: (bhk: string) => void;
 }
 
 const WorkspaceTabsBar: React.FC<WorkspaceTabsBarProps> = ({
   activeTab,
   onSelectTab,
   totalListingsCount,
+  sortBy,
+  onSortByChange,
+  minScore,
+  onMinScoreChange,
+  zeroBrokerageOnly,
+  onToggleZeroBrokerage,
+  bhkType,
+  onBhkTypeChange,
 }) => {
   const tabs: readonly {
     readonly id: WorkspaceTab;
@@ -188,138 +169,201 @@ const WorkspaceTabsBar: React.FC<WorkspaceTabsBarProps> = ({
   }[] = [
     {
       id: 'listings',
-      label: 'Listings Feed',
-      icon: <Layers className="w-4 h-4" />,
+      label: 'Feed & History',
+      icon: <Layers className="w-3.5 h-3.5" />,
       badge: totalListingsCount > 0 ? String(totalListingsCount) : undefined,
     },
     {
       id: 'groups',
-      label: 'Joined FB Groups',
-      icon: <Users className="w-4 h-4" />,
+      label: '34 FB Groups',
+      icon: <Users className="w-3.5 h-3.5" />,
     },
     {
       id: 'places',
       label: 'Bangalore Places',
-      icon: <MapPin className="w-4 h-4" />,
+      icon: <MapPin className="w-3.5 h-3.5" />,
     },
   ];
 
   return (
-    <nav
-      aria-label="Rental Radar Workspace Tabs"
-      className="bg-[#11131A]/90 p-1.5 rounded-2xl border border-white/[0.08] flex items-center gap-1.5 overflow-x-auto no-scrollbar shadow-lg"
-    >
-      {tabs.map((tab) => {
-        const isActive = activeTab === tab.id;
-        return (
+    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 bg-[#111114] p-2 rounded-xl border border-white/[0.07]">
+      <nav
+        aria-label="Rental Radar Workspace Tabs"
+        className="flex items-center gap-1 overflow-x-auto no-scrollbar"
+      >
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onSelectTab(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-[background-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] shrink-0 ${
+                isActive
+                  ? 'bg-zinc-100 text-zinc-950 font-semibold'
+                  : 'text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]'
+              }`}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+              {tab.badge && (
+                <span
+                  className={`px-1.5 py-0.2 rounded text-[10px] font-mono tabular-nums ${
+                    isActive
+                      ? 'bg-zinc-950/15 text-zinc-950 font-bold'
+                      : 'bg-[#09090B] text-zinc-300 border border-white/[0.07]'
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {activeTab === 'listings' && (
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px]">
           <button
-            key={tab.id}
             type="button"
-            onClick={() => onSelectTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-[background-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] shrink-0 ${
-              isActive
-                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                : 'text-slate-300 hover:text-white hover:bg-white/[0.05]'
+            onClick={() => onSortByChange(sortBy === 'newest' ? 'score_desc' : 'newest')}
+            className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border font-medium transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+              sortBy === 'newest'
+                ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/35'
+                : 'bg-[#09090B] text-zinc-300 border-white/[0.07]'
             }`}
           >
-            {tab.icon}
-            <span>{tab.label}</span>
-            {tab.badge && (
-              <span
-                className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono tabular-nums ${
-                  isActive
-                    ? 'bg-slate-950/20 text-slate-950 font-black'
-                    : 'bg-[#090A0F] text-emerald-400 border border-white/[0.08]'
-                }`}
-              >
-                {tab.badge}
-              </span>
-            )}
+            <Clock className="w-3 h-3 text-emerald-400" />
+            <span>{sortBy === 'newest' ? 'Latest Posts First' : 'Sorted by Score'}</span>
           </button>
-        );
-      })}
-    </nav>
+
+          <button
+            type="button"
+            onClick={() => onMinScoreChange(0)}
+            className={`shrink-0 px-2.5 py-1 rounded-lg border font-medium transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+              minScore === 0
+                ? 'bg-zinc-100 text-zinc-950 border-zinc-200 font-semibold'
+                : 'bg-[#09090B] text-zinc-400 border-white/[0.07] hover:text-zinc-200'
+            }`}
+          >
+            All Posts
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onMinScoreChange(minScore === 70 ? 0 : 70)}
+            className={`shrink-0 px-2.5 py-1 rounded-lg border font-medium transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+              minScore === 70
+                ? 'bg-zinc-100 text-zinc-950 border-zinc-200 font-semibold'
+                : 'bg-[#09090B] text-zinc-400 border-white/[0.07] hover:text-zinc-200'
+            }`}
+          >
+            High Match ≥70
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onMinScoreChange(minScore === 90 ? 0 : 90)}
+            className={`shrink-0 px-2.5 py-1 rounded-lg border font-medium transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+              minScore === 90
+                ? 'bg-emerald-400 text-zinc-950 border-emerald-300 font-semibold'
+                : 'bg-[#09090B] text-zinc-400 border-white/[0.07] hover:text-zinc-200'
+            }`}
+          >
+            Unicorns ≥90
+          </button>
+
+          <button
+            type="button"
+            onClick={onToggleZeroBrokerage}
+            className={`shrink-0 px-2.5 py-1 rounded-lg border font-medium transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+              zeroBrokerageOnly
+                ? 'bg-zinc-100 text-zinc-950 border-zinc-200 font-semibold'
+                : 'bg-[#09090B] text-zinc-400 border-white/[0.07] hover:text-zinc-200'
+            }`}
+          >
+            Direct Owner
+          </button>
+
+          {(['1 BHK', '2 BHK', '3 BHK'] as const).map((bhk) => (
+            <button
+              key={bhk}
+              type="button"
+              onClick={() => onBhkTypeChange(bhkType === bhk ? 'all' : bhk)}
+              className={`shrink-0 px-2.5 py-1 rounded-lg border font-medium transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+                bhkType === bhk
+                  ? 'bg-zinc-100 text-zinc-950 border-zinc-200 font-semibold'
+                  : 'bg-[#09090B] text-zinc-400 border-white/[0.07] hover:text-zinc-200'
+              }`}
+            >
+              {bhk}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 };
 
-interface StatsMetricsGridProps {
-  readonly stats: DashboardStats;
-  readonly totalCount: number;
-}
+const ScrapeRunHistoryLogTable: React.FC<{
+  readonly logs: readonly ScrapeLogEntry[];
+}> = ({ logs }) => {
+  if (logs.length === 0) return null;
 
-const StatsMetricsGrid: React.FC<StatsMetricsGridProps> = ({ stats, totalCount }) => {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-      <div className="bg-[#11131A]/90 p-3.5 rounded-2xl border border-white/[0.08] flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-emerald-400">
-          <Sparkles className="w-4 h-4" />
+    <div className="bg-[#111114] border border-white/[0.07] rounded-xl p-4 space-y-2.5">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
+          <Activity className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Recent Scrape Run History</span>
         </div>
-        <div>
-          <div className="text-[11px] text-slate-400 font-medium">Unicorn Matches</div>
-          <div className="text-lg font-black text-white font-mono tabular-nums">
-            {stats.unicornMatches}
-          </div>
-        </div>
+        <span className="text-[11px] font-mono tabular-nums text-zinc-400">
+          Last {logs.length} runs
+        </span>
       </div>
 
-      <div className="bg-[#11131A]/90 p-3.5 rounded-2xl border border-white/[0.08] flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-blue-950/60 border border-blue-500/30 text-blue-400">
-          <IndianRupee className="w-4 h-4" />
-        </div>
-        <div>
-          <div className="text-[11px] text-slate-400 font-medium">Average Rent</div>
-          <div className="text-lg font-black text-white font-mono tabular-nums">
-            {stats.avgRent ? `₹${stats.avgRent.toLocaleString('en-IN')}` : '—'}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-[#11131A]/90 p-3.5 rounded-2xl border border-white/[0.08] flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-cyan-950/60 border border-cyan-500/30 text-cyan-400">
-          <Clock className="w-4 h-4" />
-        </div>
-        <div>
-          <div className="text-[11px] text-slate-400 font-medium">Avg Peak Commute</div>
-          <div className="text-lg font-black text-white font-mono tabular-nums">
-            {stats.avgPeakCommuteMins} mins
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-[#11131A]/90 p-3.5 rounded-2xl border border-white/[0.08] flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-indigo-950/60 border border-indigo-500/30 text-indigo-400">
-          <Building className="w-4 h-4" />
-        </div>
-        <div>
-          <div className="text-[11px] text-slate-400 font-medium">Gated Societies</div>
-          <div className="text-lg font-black text-white font-mono tabular-nums">
-            {stats.gatedCount}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-[#11131A]/90 p-3.5 rounded-2xl border border-white/[0.08] flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-teal-950/60 border border-teal-500/30 text-teal-400">
-          <Waves className="w-4 h-4" />
-        </div>
-        <div>
-          <div className="text-[11px] text-slate-400 font-medium">Pool Access</div>
-          <div className="text-lg font-black text-white font-mono tabular-nums">
-            {stats.poolCount}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-[#11131A]/90 p-3.5 rounded-2xl border border-white/[0.08] flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-purple-950/60 border border-purple-500/30 text-purple-400">
-          <Layers className="w-4 h-4" />
-        </div>
-        <div>
-          <div className="text-[11px] text-slate-400 font-medium">Total Listings</div>
-          <div className="text-lg font-black text-white font-mono tabular-nums">
-            {totalCount || stats.totalListings}
-          </div>
-        </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-xs font-mono tabular-nums">
+          <thead className="text-[11px] text-zinc-400 border-b border-white/[0.07]">
+            <tr>
+              <th className="py-1.5 px-2">Run Timestamp (IST)</th>
+              <th className="py-1.5 px-2">Status</th>
+              <th className="py-1.5 px-2">Groups</th>
+              <th className="py-1.5 px-2">Scanned</th>
+              <th className="py-1.5 px-2">Matched</th>
+              <th className="py-1.5 px-2 text-right">Duration</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/[0.05] text-zinc-300">
+            {logs.map((entry) => {
+              const bucketInfo = formatListingDayBucket(entry.runAt, '');
+              return (
+                <tr key={entry.id} className="hover:bg-[#141418]">
+                  <td className="py-1.5 px-2 text-zinc-200">{bucketInfo.exactTimeIST}</td>
+                  <td className="py-1.5 px-2">
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-sans font-medium ${
+                        entry.status === 'success'
+                          ? 'bg-emerald-950/50 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-amber-950/50 text-amber-300 border border-amber-500/30'
+                      }`}
+                    >
+                      {entry.status}
+                    </span>
+                  </td>
+                  <td className="py-1.5 px-2">{entry.groupsScanned}</td>
+                  <td className="py-1.5 px-2">{entry.itemsScanned}</td>
+                  <td className="py-1.5 px-2 text-emerald-400 font-semibold">
+                    +{entry.itemsMatched}
+                  </td>
+                  <td className="py-1.5 px-2 text-right text-zinc-400">
+                    {(entry.durationMs / 1000).toFixed(1)}s
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -374,17 +418,17 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
   const pageTokens = buildPageTokens(page, totalPages);
 
   return (
-    <div className="bg-[#11131A]/90 p-4 rounded-2xl border border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs shadow-xl">
-      <div className="text-slate-400 font-medium text-center sm:text-left">
+    <div className="bg-[#111114] p-3.5 rounded-xl border border-white/[0.07] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+      <div className="text-zinc-400 font-medium text-center sm:text-left">
         Showing{' '}
-        <span className="text-white font-bold font-mono tabular-nums">
+        <span className="text-zinc-100 font-semibold font-mono tabular-nums">
           {totalCount === 0 ? 0 : (page - 1) * limit + 1}–{Math.min(page * limit, totalCount)}
         </span>{' '}
-        of <span className="text-white font-bold font-mono tabular-nums">{totalCount}</span>{' '}
+        of <span className="text-zinc-100 font-semibold font-mono tabular-nums">{totalCount}</span>{' '}
         listings
-        <span className="mx-2 text-slate-600">•</span>
-        Page <span className="text-emerald-400 font-bold font-mono tabular-nums">{page}</span> of{' '}
-        <span className="text-slate-200 font-bold font-mono tabular-nums">{totalPages}</span>
+        <span className="mx-2 text-zinc-600">•</span>
+        Page <span className="text-emerald-400 font-semibold font-mono tabular-nums">{page}</span> of{' '}
+        <span className="text-zinc-200 font-semibold font-mono tabular-nums">{totalPages}</span>
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap justify-center">
@@ -392,7 +436,7 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1 || loading}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#090A0F] hover:bg-white/[0.06] border border-white/[0.08] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] font-semibold"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#09090B] hover:bg-white/[0.06] border border-white/[0.07] text-zinc-300 disabled:opacity-40 disabled:cursor-not-allowed transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] font-medium"
           title="Previous Page"
         >
           <ChevronLeft className="w-3.5 h-3.5" />
@@ -404,7 +448,7 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
             typeof item === 'object' ? (
               <span
                 key={`ellipsis-${item.ellipsisAfter}`}
-                className="px-1.5 py-1 text-slate-500 font-mono"
+                className="px-1.5 py-1 text-zinc-500 font-mono"
               >
                 …
               </span>
@@ -414,10 +458,10 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
                 type="button"
                 onClick={() => onPageChange(item)}
                 disabled={loading}
-                className={`w-8 h-8 rounded-xl text-xs font-bold font-mono tabular-nums transition-[background-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+                className={`w-7 h-7 rounded-lg text-xs font-semibold font-mono tabular-nums transition-[background-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                   page === item
-                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                    : 'bg-[#090A0F] hover:bg-white/[0.06] text-slate-300 border border-white/[0.08]'
+                    ? 'bg-zinc-100 text-zinc-950'
+                    : 'bg-[#09090B] hover:bg-white/[0.06] text-zinc-300 border border-white/[0.07]'
                 }`}
               >
                 {item}
@@ -430,7 +474,7 @@ const PaginationBar: React.FC<PaginationBarProps> = ({
           type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages || !hasMore || loading}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#090A0F] hover:bg-white/[0.06] border border-white/[0.08] text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] font-semibold"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#09090B] hover:bg-white/[0.06] border border-white/[0.07] text-zinc-300 disabled:opacity-40 disabled:cursor-not-allowed transition-[background-color,border-color,color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] font-medium"
           title="Next Page"
         >
           <span>Next</span>
@@ -445,6 +489,7 @@ interface ListingsResultsSectionProps {
   readonly error: string | null;
   readonly loading: boolean;
   readonly viewMode: 'grid' | 'table';
+  readonly sortBy: SortBy;
   readonly displayedListings: RentalListing[];
   readonly onRetry: () => void;
   readonly onResetFilters: () => void;
@@ -457,6 +502,7 @@ const ListingsResultsSection: React.FC<ListingsResultsSectionProps> = ({
   error,
   loading,
   viewMode,
+  sortBy,
   displayedListings,
   onRetry,
   onResetFilters,
@@ -464,14 +510,23 @@ const ListingsResultsSection: React.FC<ListingsResultsSectionProps> = ({
   onOpenScoreModal,
   onOpenDrawer,
 }) => {
+  const dayBucketCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of displayedListings) {
+      const { bucketLabel } = formatListingDayBucket(item.createdAt, item.postedTime);
+      counts.set(bucketLabel, (counts.get(bucketLabel) ?? 0) + 1);
+    }
+    return Array.from(counts.entries());
+  }, [displayedListings]);
+
   if (error) {
     return (
-      <div className="bg-rose-950/30 border border-rose-500/40 p-5 rounded-2xl text-rose-300 flex items-center justify-between text-xs">
+      <div className="bg-rose-950/30 border border-rose-500/40 p-4 rounded-xl text-rose-300 flex items-center justify-between text-xs">
         <span>{error}</span>
         <button
           type="button"
           onClick={onRetry}
-          className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold"
+          className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold"
         >
           Retry
         </button>
@@ -481,18 +536,18 @@ const ListingsResultsSection: React.FC<ListingsResultsSectionProps> = ({
 
   if (displayedListings.length === 0 && !loading && viewMode !== 'table') {
     return (
-      <div className="bg-[#11131A]/90 p-12 rounded-3xl text-center space-y-4 border border-white/[0.08]">
-        <div className="w-12 h-12 mx-auto rounded-2xl bg-[#090A0F] flex items-center justify-center text-slate-500">
-          <Sparkles className="w-6 h-6" />
+      <div className="bg-[#111114] p-10 rounded-xl text-center space-y-3 border border-white/[0.07]">
+        <div className="w-10 h-10 mx-auto rounded-xl bg-[#09090B] border border-white/[0.07] flex items-center justify-center text-zinc-400">
+          <Sparkles className="w-5 h-5" />
         </div>
-        <h3 className="text-base font-bold text-white">No Matching Listings Found</h3>
-        <p className="text-xs text-slate-400 max-w-sm mx-auto">
-          Try adjusting your rent slider, lowering the minimum score threshold, or widening the recency window.
+        <h3 className="text-sm font-semibold text-zinc-100">No Matching Listings Found</h3>
+        <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+          Try lowering the minimum score threshold, widening the rent ceiling, or resetting filters.
         </p>
         <button
           type="button"
           onClick={onResetFilters}
-          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs"
+          className="px-3.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 font-semibold text-xs"
         >
           Reset All Filters
         </button>
@@ -500,24 +555,71 @@ const ListingsResultsSection: React.FC<ListingsResultsSectionProps> = ({
     );
   }
 
-  return viewMode === 'table' ? (
-    <ListingTable
-      listings={displayedListings}
-      onStatusChange={onStatusChange}
-      onOpenScoreModal={onOpenScoreModal}
-      onOpenDrawer={onOpenDrawer}
-    />
-  ) : (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-      {displayedListings.map((listing) => (
-        <ListingCard
-          key={listing.id}
-          listing={listing}
+  return (
+    <div className="space-y-3">
+      {dayBucketCounts.length > 0 && (
+        <div className="flex items-center justify-between gap-2 flex-wrap px-1 text-[11px] text-zinc-400">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="font-medium text-zinc-300">Post History on Page:</span>
+            {dayBucketCounts.map(([bucket, count]) => (
+              <span
+                key={bucket}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#111114] border border-white/[0.07] text-zinc-300 font-mono tabular-nums"
+              >
+                <span>{bucket}</span>
+                <span className="text-emerald-400 font-semibold">({count})</span>
+              </span>
+            ))}
+          </div>
+          <span className="font-mono tabular-nums text-zinc-500">
+            Showing {displayedListings.length} posts in current view
+          </span>
+        </div>
+      )}
+
+      {viewMode === 'table' ? (
+        <ListingTable
+          listings={displayedListings}
           onStatusChange={onStatusChange}
           onOpenScoreModal={onOpenScoreModal}
           onOpenDrawer={onOpenDrawer}
         />
-      ))}
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {displayedListings.map((listing, idx) => {
+            const currentBucket = formatListingDayBucket(
+              listing.createdAt,
+              listing.postedTime,
+            ).bucketLabel;
+            const prevListing = idx > 0 ? displayedListings[idx - 1] : undefined;
+            const prevBucket = prevListing
+              ? formatListingDayBucket(prevListing.createdAt, prevListing.postedTime).bucketLabel
+              : null;
+            const showDayDivider = sortBy === 'newest' && currentBucket !== prevBucket;
+
+            return (
+              <React.Fragment key={listing.id}>
+                {showDayDivider && (
+                  <div className="col-span-full flex items-center gap-3 pt-2 pb-0.5">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#111114] border border-white/[0.08] text-xs font-semibold text-zinc-200 font-mono tabular-nums">
+                      <Calendar className="w-3 h-3 text-emerald-400" />
+                      {currentBucket}
+                    </span>
+                    <div className="flex-1 h-px bg-white/[0.06]" />
+                  </div>
+                )}
+                <ListingCard
+                  listing={listing}
+                  onStatusChange={onStatusChange}
+                  onOpenScoreModal={onOpenScoreModal}
+                  onOpenDrawer={onOpenDrawer}
+                />
+              </React.Fragment>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
@@ -603,52 +705,266 @@ function useScrapePoller(
   }, [scrapePhase, setScrapePhase]);
 }
 
-/**
- * Root Rental Radar v3 workbench application.
- */
-export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('listings');
-  const [listings, setListings] = useState<RentalListing[]>([]);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [scrapePhase, setScrapePhase] = useState<ScrapePhase>('idle');
-  const [error, setError] = useState<string | null>(null);
-  const [scrapeNotice, setScrapeNotice] = useState<string | null>(null);
+const MarketPulseExpandablePanel: React.FC<{
+  readonly showMarketPulse: boolean;
+  readonly stats: DashboardStatsWithLogs | null;
+  readonly listings: RentalListing[];
+  readonly maxRent: number;
+  readonly onMaxRentChange: (rent: number) => void;
+  readonly selectedCorridor: string;
+  readonly onSelectCorridor: (id: string) => void;
+  readonly selectedZone: string;
+  readonly onSelectZone: (zone: string) => void;
+  readonly zeroBrokerageOnly: boolean;
+  readonly onToggleZeroBrokerage: () => void;
+  readonly bachelorFriendlyOnly: boolean;
+  readonly onToggleBachelorFriendly: () => void;
+}> = ({
+  showMarketPulse,
+  stats,
+  listings,
+  maxRent,
+  onMaxRentChange,
+  selectedCorridor,
+  onSelectCorridor,
+  selectedZone,
+  onSelectZone,
+  zeroBrokerageOnly,
+  onToggleZeroBrokerage,
+  bachelorFriendlyOnly,
+  onToggleBachelorFriendly,
+}) => {
+  if (!showMarketPulse) return null;
 
-  const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
-  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [drawerListing, setDrawerListing] = useState<RentalListing | null>(null);
-  const [selectedScoreListing, setSelectedScoreListing] = useState<RentalListing | null>(null);
+  return (
+    <div className="space-y-3.5">
+      {stats?.scrapeLogs && stats.scrapeLogs.length > 0 && (
+        <ScrapeRunHistoryLogTable logs={stats.scrapeLogs} />
+      )}
 
-  const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+      <PriceCommuteHistogram
+        listings={listings}
+        maxRent={maxRent}
+        onMaxRentChange={onMaxRentChange}
+        selectedCorridor={selectedCorridor}
+        onSelectCorridor={onSelectCorridor}
+      />
 
+      <CorridorFilter
+        selectedCorridor={selectedCorridor}
+        onSelectCorridor={onSelectCorridor}
+        selectedZone={selectedZone}
+        onSelectZone={onSelectZone}
+        zeroBrokerageOnly={zeroBrokerageOnly}
+        onToggleZeroBrokerage={onToggleZeroBrokerage}
+        bachelorFriendlyOnly={bachelorFriendlyOnly}
+        onToggleBachelorFriendly={onToggleBachelorFriendly}
+      />
+    </div>
+  );
+};
+
+const AppOverlays: React.FC<{
+  readonly selectedScoreListing: RentalListing | null;
+  readonly onCloseScoreModal: () => void;
+  readonly isIngestModalOpen: boolean;
+  readonly onCloseIngestModal: () => void;
+  readonly onIngestSuccess: (newListing: RentalListing) => void;
+  readonly isCommandPaletteOpen: boolean;
+  readonly onCloseCommandPalette: () => void;
+  readonly selectedCorridor: string;
+  readonly onSelectCorridor: (id: string) => void;
+  readonly bhkType: string;
+  readonly onSelectBhkType: (bhk: string) => void;
+  readonly sortBy: SortBy;
+  readonly onSelectSortBy: (sort: SortBy) => void;
+  readonly zeroBrokerageOnly: boolean;
+  readonly onToggleZeroBrokerage: () => void;
+  readonly bachelorFriendlyOnly: boolean;
+  readonly onToggleBachelorFriendly: () => void;
+  readonly listings: RentalListing[];
+  readonly drawerListing: RentalListing | null;
+  readonly onSelectListing: (listing: RentalListing | null) => void;
+  readonly onStatusChange: (id: number, status: UserListingStatus) => void;
+  readonly onOpenScoreModal: (listing: RentalListing) => void;
+}> = ({
+  selectedScoreListing,
+  onCloseScoreModal,
+  isIngestModalOpen,
+  onCloseIngestModal,
+  onIngestSuccess,
+  isCommandPaletteOpen,
+  onCloseCommandPalette,
+  selectedCorridor,
+  onSelectCorridor,
+  bhkType,
+  onSelectBhkType,
+  sortBy,
+  onSelectSortBy,
+  zeroBrokerageOnly,
+  onToggleZeroBrokerage,
+  bachelorFriendlyOnly,
+  onToggleBachelorFriendly,
+  listings,
+  drawerListing,
+  onSelectListing,
+  onStatusChange,
+  onOpenScoreModal,
+}) => {
+  return (
+    <>
+      <ScoreBreakdownModal
+        listing={selectedScoreListing}
+        onClose={onCloseScoreModal}
+      />
+
+      <QuickIngestModal
+        isOpen={isIngestModalOpen}
+        onClose={onCloseIngestModal}
+        onIngestSuccess={onIngestSuccess}
+      />
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={onCloseCommandPalette}
+        corridors={BANGALORE_CORRIDORS}
+        selectedCorridor={selectedCorridor}
+        onSelectCorridor={onSelectCorridor}
+        bhkType={bhkType}
+        onSelectBhkType={onSelectBhkType}
+        sortBy={sortBy}
+        onSelectSortBy={onSelectSortBy}
+        zeroBrokerageOnly={zeroBrokerageOnly}
+        onToggleZeroBrokerage={onToggleZeroBrokerage}
+        bachelorFriendlyOnly={bachelorFriendlyOnly}
+        onToggleBachelorFriendly={onToggleBachelorFriendly}
+        listings={listings}
+        onSelectListing={onSelectListing}
+      />
+
+      <ListingDrawer
+        listing={drawerListing}
+        isOpen={Boolean(drawerListing)}
+        onClose={() => onSelectListing(null)}
+        onStatusChange={onStatusChange}
+        onOpenScoreModal={onOpenScoreModal}
+      />
+
+      <ToastStack />
+    </>
+  );
+};
+
+function useFilterControls() {
   const [selectedCorridor, setSelectedCorridor] = useState<string>('all');
   const [selectedZone, setSelectedZone] = useState<string>('all');
   const [zeroBrokerageOnly, setZeroBrokerageOnly] = useState<boolean>(false);
   const [bachelorFriendlyOnly, setBachelorFriendlyOnly] = useState<boolean>(false);
   const [search, setSearch] = useState('');
-  const [minScore, setMinScore] = useState(40);
-  const [maxRent, setMaxRent] = useState(45000);
+  const [minScore, setMinScore] = useState<number>(0);
+  const [maxRent, setMaxRent] = useState<number>(45000);
   const [bhkType, setBhkType] = useState('all');
   const [furnishing, setFurnishing] = useState('all');
   const [userStatus, setUserStatus] = useState('all');
-  const [recency, setRecency] = useState('7d');
-  const [sortBy, setSortBy] = useState<SortBy>('score_desc');
-  const [limit, setLimit] = useState<number>(12);
+  const [recency, setRecency] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<SortBy>('newest');
+  const [limit, setLimit] = useState<number>(24);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+
+  const resetAllFilters = useCallback(() => {
+    setSelectedCorridor('all');
+    setSelectedZone('all');
+    setZeroBrokerageOnly(false);
+    setBachelorFriendlyOnly(false);
+    setSearch('');
+    setMinScore(0);
+    setMaxRent(45000);
+    setBhkType('all');
+    setFurnishing('all');
+    setUserStatus('all');
+    setRecency('all');
+    setSortBy('newest');
+    setLimit(24);
+    toast.info('All filters reset to chronological feed defaults');
+  }, []);
+
+  return {
+    selectedCorridor,
+    setSelectedCorridor,
+    selectedZone,
+    setSelectedZone,
+    zeroBrokerageOnly,
+    setZeroBrokerageOnly,
+    bachelorFriendlyOnly,
+    setBachelorFriendlyOnly,
+    search,
+    setSearch,
+    minScore,
+    setMinScore,
+    maxRent,
+    setMaxRent,
+    bhkType,
+    setBhkType,
+    furnishing,
+    setFurnishing,
+    userStatus,
+    setUserStatus,
+    recency,
+    setRecency,
+    sortBy,
+    setSortBy,
+    limit,
+    setLimit,
+    viewMode,
+    setViewMode,
+    resetAllFilters,
+  };
+}
+
+function useCommandPaletteShortcut(onToggle: () => void) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        onToggle();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onToggle]);
+}
+
+function useListingsData(filters: ReturnType<typeof useFilterControls>) {
+  const [listings, setListings] = useState<RentalListing[]>([]);
+  const [stats, setStats] = useState<DashboardStatsWithLogs | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+
+  const {
+    limit,
+    minScore,
+    maxRent,
+    bhkType,
+    furnishing,
+    userStatus,
+    recency,
+    search,
+    sortBy,
+    selectedCorridor,
+    selectedZone,
+  } = filters;
 
   const fetchListings = useCallback(
     async (targetPage = 1, append = false, requestedLimit = limit) => {
       setLoading(true);
       setError(null);
-
       try {
         const querySearch =
           search.trim() || (selectedCorridor !== 'all' ? selectedCorridor : undefined);
-
         const result = await api.getListings({
           page: targetPage,
           limit: requestedLimit,
@@ -662,12 +978,10 @@ export const App: React.FC = () => {
           ...(selectedZone !== 'all' ? { zone: selectedZone } : {}),
           ...(querySearch ? { search: querySearch } : {}),
         });
-
         if (result._tag === 'err') {
           setError(result.error.message);
           return;
         }
-
         const data = result.value;
         setListings((prev) => (append ? [...prev, ...data.listings] : data.listings));
         setPage(data.page || 1);
@@ -695,9 +1009,7 @@ export const App: React.FC = () => {
 
   const fetchStats = useCallback(async () => {
     const result = await api.getStats();
-    if (result._tag === 'ok') {
-      setStats(result.value);
-    }
+    if (result._tag === 'ok') setStats(result.value);
   }, []);
 
   const refreshAll = useCallback(() => {
@@ -709,18 +1021,57 @@ export const App: React.FC = () => {
     refreshAll();
   }, [refreshAll]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsCommandPaletteOpen((prev) => !prev);
-      }
-    };
+  return {
+    listings,
+    setListings,
+    stats,
+    loading,
+    error,
+    page,
+    setPage,
+    totalCount,
+    setTotalCount,
+    totalPages,
+    hasMore,
+    fetchListings,
+    fetchStats,
+    refreshAll,
+  };
+}
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+/**
+ * Root Rental Radar v3 workbench application.
+ */
+export const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('listings');
+  const [scrapePhase, setScrapePhase] = useState<ScrapePhase>('idle');
+  const [scrapeNotice, setScrapeNotice] = useState<string | null>(null);
+  const [showMarketPulse, setShowMarketPulse] = useState(false);
+  const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [drawerListing, setDrawerListing] = useState<RentalListing | null>(null);
+  const [selectedScoreListing, setSelectedScoreListing] = useState<RentalListing | null>(null);
 
+  const filters = useFilterControls();
+  const data = useListingsData(filters);
+  const {
+    listings,
+    setListings,
+    stats,
+    loading,
+    error,
+    page,
+    setPage,
+    totalCount,
+    setTotalCount,
+    totalPages,
+    hasMore,
+    fetchListings,
+    fetchStats,
+    refreshAll,
+  } = data;
+
+  useCommandPaletteShortcut(useCallback(() => setIsCommandPaletteOpen((p) => !p), []));
   useScrapePoller(scrapePhase, setScrapePhase, setScrapeNotice, refreshAll);
 
   const handleStatusChange = async (id: number, status: UserListingStatus) => {
@@ -729,7 +1080,7 @@ export const App: React.FC = () => {
     const result = await api.updateListingStatus(id, status);
     if (result._tag === 'err') {
       toast.error(`Failed to update listing: ${result.error.message}`);
-      fetchListings(page, false, limit);
+      fetchListings(page, false, filters.limit);
       return;
     }
     fetchStats();
@@ -739,14 +1090,12 @@ export const App: React.FC = () => {
     if (scrapePhase === 'running') return;
     setScrapePhase('running');
     setScrapeNotice('Dispatching live scraper workflow in GitHub Actions...');
-
     const result = await api.triggerScrape();
     if (result._tag === 'err') {
       setScrapePhase('error');
       setScrapeNotice(`Scrape failed: ${result.error.message}`);
       return;
     }
-
     setScrapeNotice(
       'GitHub Actions scraper is running... Scanning Facebook groups & syncing listings.',
     );
@@ -763,50 +1112,37 @@ export const App: React.FC = () => {
 
   const displayedListings = filterDisplayedListings(
     listings,
-    zeroBrokerageOnly,
-    bachelorFriendlyOnly,
-    selectedCorridor,
-    search,
+    filters.zeroBrokerageOnly,
+    filters.bachelorFriendlyOnly,
+    filters.selectedCorridor,
+    filters.search,
   );
 
-  const handleResetFilters = () => {
-    setSelectedCorridor('all');
-    setSelectedZone('all');
-    setZeroBrokerageOnly(false);
-    setBachelorFriendlyOnly(false);
-    setSearch('');
-    setMinScore(40);
-    setMaxRent(45000);
-    setBhkType('all');
-    setFurnishing('all');
-    setUserStatus('all');
-    setRecency('7d');
-    setSortBy('score_desc');
-    setLimit(12);
-    toast.info('All filters reset to defaults');
-  };
-
   const handleLimitChange = (newLimit: number) => {
-    setLimit(newLimit);
+    filters.setLimit(newLimit);
     setPage(1);
     fetchListings(1, false, newLimit);
   };
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages && newPage !== page && !loading) {
-      fetchListings(newPage, false, limit);
+      fetchListings(newPage, false, filters.limit);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#090A0F] text-slate-100 p-4 md:p-8 font-sans selection:bg-emerald-500 selection:text-slate-950">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <AppHeader
+    <div className="min-h-screen bg-[#09090B] text-zinc-100 p-3 md:p-6 font-sans selection:bg-emerald-500 selection:text-zinc-950">
+      <div className="max-w-7xl mx-auto space-y-3.5">
+        <HeaderStats
+          stats={stats}
+          onTriggerScrape={handleTriggerScrape}
+          isScraping={scrapePhase === 'running'}
           scrapePhase={scrapePhase}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           onOpenIngestModal={() => setIsIngestModalOpen(true)}
-          onTriggerScrape={handleTriggerScrape}
+          showMarketPulse={showMarketPulse}
+          onToggleMarketPulse={() => setShowMarketPulse((prev) => !prev)}
         />
 
         <ScrapeNoticeBanner
@@ -819,6 +1155,23 @@ export const App: React.FC = () => {
           activeTab={activeTab}
           onSelectTab={setActiveTab}
           totalListingsCount={totalCount || stats?.totalListings || 0}
+          sortBy={filters.sortBy}
+          onSortByChange={(nextSort) => {
+            filters.setSortBy(nextSort);
+            setPage(1);
+          }}
+          minScore={filters.minScore}
+          onMinScoreChange={(nextScore) => {
+            filters.setMinScore(nextScore);
+            setPage(1);
+          }}
+          zeroBrokerageOnly={filters.zeroBrokerageOnly}
+          onToggleZeroBrokerage={() => filters.setZeroBrokerageOnly((prev) => !prev)}
+          bhkType={filters.bhkType}
+          onBhkTypeChange={(nextBhk) => {
+            filters.setBhkType(nextBhk);
+            setPage(1);
+          }}
         />
 
         {activeTab === 'groups' ? (
@@ -826,9 +1179,9 @@ export const App: React.FC = () => {
         ) : activeTab === 'places' ? (
           <PlacesDirectoryView
             onSelectLocality={(localityOrSociety) => {
-              setSearch(localityOrSociety);
-              setSelectedCorridor('all');
-              setSelectedZone('all');
+              filters.setSearch(localityOrSociety);
+              filters.setSelectedCorridor('all');
+              filters.setSelectedZone('all');
               setPage(1);
               setActiveTab('listings');
               toast.info(`Filtered listings to ${localityOrSociety}`);
@@ -836,70 +1189,63 @@ export const App: React.FC = () => {
           />
         ) : (
           <>
-            {stats && <StatsMetricsGrid stats={stats} totalCount={totalCount} />}
-
-            <PriceCommuteHistogram
+            <MarketPulseExpandablePanel
+              showMarketPulse={showMarketPulse}
+              stats={stats}
               listings={listings}
-              maxRent={maxRent}
+              maxRent={filters.maxRent}
               onMaxRentChange={(rent) => {
-                setMaxRent(rent);
+                filters.setMaxRent(rent);
                 setPage(1);
               }}
-              selectedCorridor={selectedCorridor}
+              selectedCorridor={filters.selectedCorridor}
               onSelectCorridor={(id) => {
-                setSelectedCorridor(id);
+                filters.setSelectedCorridor(id);
                 setPage(1);
               }}
-            />
-
-            <CorridorFilter
-              selectedCorridor={selectedCorridor}
-              onSelectCorridor={(id) => {
-                setSelectedCorridor(id);
-                setPage(1);
-              }}
-              selectedZone={selectedZone}
+              selectedZone={filters.selectedZone}
               onSelectZone={(zone) => {
-                setSelectedZone(zone);
+                filters.setSelectedZone(zone);
                 setPage(1);
               }}
-              zeroBrokerageOnly={zeroBrokerageOnly}
-              onToggleZeroBrokerage={() => setZeroBrokerageOnly((prev) => !prev)}
-              bachelorFriendlyOnly={bachelorFriendlyOnly}
-              onToggleBachelorFriendly={() => setBachelorFriendlyOnly((prev) => !prev)}
+              zeroBrokerageOnly={filters.zeroBrokerageOnly}
+              onToggleZeroBrokerage={() => filters.setZeroBrokerageOnly((prev) => !prev)}
+              bachelorFriendlyOnly={filters.bachelorFriendlyOnly}
+              onToggleBachelorFriendly={() => filters.setBachelorFriendlyOnly((prev) => !prev)}
             />
 
             <FilterBar
-              search={search}
-              onSearchChange={setSearch}
-              minScore={minScore}
-              onMinScoreChange={setMinScore}
-              maxRent={maxRent}
-              onMaxRentChange={setMaxRent}
-              bhkType={bhkType}
-              onBhkTypeChange={setBhkType}
-              furnishing={furnishing}
-              onFurnishingChange={setFurnishing}
-              userStatus={userStatus}
-              onUserStatusChange={setUserStatus}
-              recency={recency}
-              onRecencyChange={setRecency}
-              sortBy={sortBy}
-              onSortByChange={setSortBy}
-              limit={limit}
+              search={filters.search}
+              onSearchChange={filters.setSearch}
+              minScore={filters.minScore}
+              onMinScoreChange={filters.setMinScore}
+              maxRent={filters.maxRent}
+              onMaxRentChange={filters.setMaxRent}
+              bhkType={filters.bhkType}
+              onBhkTypeChange={filters.setBhkType}
+              furnishing={filters.furnishing}
+              onFurnishingChange={filters.setFurnishing}
+              userStatus={filters.userStatus}
+              onUserStatusChange={filters.setUserStatus}
+              recency={filters.recency}
+              onRecencyChange={filters.setRecency}
+              sortBy={filters.sortBy}
+              onSortByChange={filters.setSortBy}
+              limit={filters.limit}
               onLimitChange={handleLimitChange}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              onResetFilters={handleResetFilters}
+              viewMode={filters.viewMode}
+              onViewModeChange={filters.setViewMode}
+              onResetFilters={filters.resetAllFilters}
             />
 
             <ListingsResultsSection
               error={error}
               loading={loading}
-              viewMode={viewMode}
+              viewMode={filters.viewMode}
+              sortBy={filters.sortBy}
               displayedListings={displayedListings}
               onRetry={() => fetchListings(1, false)}
-              onResetFilters={handleResetFilters}
+              onResetFilters={filters.resetAllFilters}
               onStatusChange={handleStatusChange}
               onOpenScoreModal={setSelectedScoreListing}
               onOpenDrawer={setDrawerListing}
@@ -908,7 +1254,7 @@ export const App: React.FC = () => {
             {totalCount > 0 && (
               <PaginationBar
                 page={page}
-                limit={limit}
+                limit={filters.limit}
                 totalCount={totalCount}
                 totalPages={totalPages}
                 hasMore={hasMore}
@@ -919,53 +1265,39 @@ export const App: React.FC = () => {
           </>
         )}
 
-        <ScoreBreakdownModal
-          listing={selectedScoreListing}
-          onClose={() => setSelectedScoreListing(null)}
-        />
-
-        <QuickIngestModal
-          isOpen={isIngestModalOpen}
-          onClose={() => setIsIngestModalOpen(false)}
+        <AppOverlays
+          selectedScoreListing={selectedScoreListing}
+          onCloseScoreModal={() => setSelectedScoreListing(null)}
+          isIngestModalOpen={isIngestModalOpen}
+          onCloseIngestModal={() => setIsIngestModalOpen(false)}
           onIngestSuccess={handleIngestSuccess}
-        />
-
-        <CommandPalette
-          isOpen={isCommandPaletteOpen}
-          onClose={() => setIsCommandPaletteOpen(false)}
-          corridors={BANGALORE_CORRIDORS}
-          selectedCorridor={selectedCorridor}
+          isCommandPaletteOpen={isCommandPaletteOpen}
+          onCloseCommandPalette={() => setIsCommandPaletteOpen(false)}
+          selectedCorridor={filters.selectedCorridor}
           onSelectCorridor={(id) => {
-            setSelectedCorridor(id);
+            filters.setSelectedCorridor(id);
             setPage(1);
           }}
-          bhkType={bhkType}
+          bhkType={filters.bhkType}
           onSelectBhkType={(bhk) => {
-            setBhkType(bhk);
+            filters.setBhkType(bhk);
             setPage(1);
           }}
-          sortBy={sortBy}
+          sortBy={filters.sortBy}
           onSelectSortBy={(sort) => {
-            setSortBy(sort);
+            filters.setSortBy(sort);
             setPage(1);
           }}
-          zeroBrokerageOnly={zeroBrokerageOnly}
-          onToggleZeroBrokerage={() => setZeroBrokerageOnly((prev) => !prev)}
-          bachelorFriendlyOnly={bachelorFriendlyOnly}
-          onToggleBachelorFriendly={() => setBachelorFriendlyOnly((prev) => !prev)}
+          zeroBrokerageOnly={filters.zeroBrokerageOnly}
+          onToggleZeroBrokerage={() => filters.setZeroBrokerageOnly((prev) => !prev)}
+          bachelorFriendlyOnly={filters.bachelorFriendlyOnly}
+          onToggleBachelorFriendly={() => filters.setBachelorFriendlyOnly((prev) => !prev)}
           listings={listings}
+          drawerListing={drawerListing}
           onSelectListing={setDrawerListing}
-        />
-
-        <ListingDrawer
-          listing={drawerListing}
-          isOpen={Boolean(drawerListing)}
-          onClose={() => setDrawerListing(null)}
           onStatusChange={handleStatusChange}
           onOpenScoreModal={setSelectedScoreListing}
         />
-
-        <ToastStack />
       </div>
     </div>
   );

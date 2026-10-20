@@ -532,6 +532,24 @@ const scrapeStatusHandler = async (c: Context) => {
 app.get('/scrape/status', scrapeStatusHandler);
 app.get('/api/scrape/status', scrapeStatusHandler);
 
+const scrapeHistoryHandler = async (c: Context) => {
+  const result = await runEdgeEffect(
+    Effect.gen(function* () {
+      const repo = yield* ListingRepository;
+      return yield* repo.getScrapeLogs(25);
+    })
+  );
+
+  if (Either.isLeft(result)) {
+    return c.json({ count: 0, logs: [], error: result.left.message }, 500);
+  }
+
+  return c.json({ count: result.right.length, logs: result.right });
+};
+
+app.get('/scrape/history', scrapeHistoryHandler);
+app.get('/api/scrape/history', scrapeHistoryHandler);
+
 interface ParseSingleRequest {
   readonly text?: string;
   readonly postUrl?: string;

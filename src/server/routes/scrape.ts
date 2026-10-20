@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
+import { Effect, Either } from 'effect';
 import { cleanPostText } from '../../domain/parser/cleaner';
 import { passesAllFilters } from '../../domain/parser/filter';
+import {
+  ListingRepository,
+  ListingRepositoryLive,
+} from '../../domain/services/RepositoryService';
 
 export const scrapeRouter = new Hono();
 
@@ -32,6 +37,20 @@ let localScrapeState: {
 
 scrapeRouter.get('/status', (c) => {
   return c.json(localScrapeState);
+});
+
+scrapeRouter.get('/history', async (c) => {
+  const program = Effect.gen(function* () {
+    const repo = yield* ListingRepository;
+    return yield* repo.getScrapeLogs(25);
+  }).pipe(Effect.either, Effect.provide(ListingRepositoryLive));
+
+  const result = await Effect.runPromise(program);
+  if (Either.isLeft(result)) {
+    return c.json({ count: 0, logs: [], error: result.left.message }, 500);
+  }
+
+  return c.json({ count: result.right.length, logs: result.right });
 });
 
 scrapeRouter.post('/trigger', async (c) => {

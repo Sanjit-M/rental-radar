@@ -77,8 +77,8 @@ func LaunchCDP(ctx context.Context, cfg *config.Config, headless bool) (*CDPBrow
 		cookies: cookies,
 	}
 
-	// Wait up to 8s for DevTools HTTP endpoint to come up
-	deadline := time.Now().Add(8 * time.Second)
+	// Wait up to 25s for DevTools HTTP endpoint to come up
+	deadline := time.Now().Add(25 * time.Second)
 	for time.Now().Before(deadline) {
 		if b.isReady() {
 			return b, nil

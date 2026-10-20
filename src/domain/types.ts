@@ -221,6 +221,18 @@ export interface PaginatedListingsResponse {
   readonly listings: RentalListing[];
 }
 
+/** Record of a single scraper execution cycle from scrape_logs. */
+export interface ScrapeLogEntry {
+  readonly id: number;
+  readonly runAt: string;
+  readonly groupsScanned: number;
+  readonly itemsScanned: number;
+  readonly itemsMatched: number;
+  readonly status: string;
+  readonly errorMessage: string | null;
+  readonly durationMs: number;
+}
+
 /** Aggregated Dashboard metrics. */
 export interface DashboardStats {
   readonly totalListings: number;
@@ -232,6 +244,7 @@ export interface DashboardStats {
   readonly poolCount: number;
   readonly directOwnerCount: number;
   readonly lastScrapeTime: string | null;
+  readonly scrapeLogs?: readonly ScrapeLogEntry[] | undefined;
 }
 
 /** Normalized Raw Scraped Post record from any source (Facebook, Telegram, etc.) */

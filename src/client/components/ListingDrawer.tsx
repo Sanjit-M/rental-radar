@@ -30,7 +30,28 @@ import {
   Copy,
   Check,
   MapPin,
+  Layers,
 } from 'lucide-react';
+
+const DRAWER_IST_FORMATTER = new Intl.DateTimeFormat('en-IN', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: true,
+  timeZone: 'Asia/Kolkata',
+});
+
+function formatDrawerScrapedTimeIST(createdAt: string | undefined): string {
+  if (!createdAt) return 'Unknown';
+  const normalized = createdAt.includes('T')
+    ? createdAt
+    : `${createdAt.replace(' ', 'T')}Z`;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return createdAt;
+  return `${DRAWER_IST_FORMATTER.format(parsed)} IST`;
+}
 
 export interface ListingDrawerProps {
   readonly listing: RentalListing | null;
@@ -131,7 +152,7 @@ const DrawerMapsLinks: React.FC<{ readonly listing: RentalListing }> = ({ listin
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-2">
       {listing.zone && (
-        <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-cyan-950/70 text-cyan-300 border border-cyan-500/40">
+        <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-[#18181C] text-zinc-300 border border-white/[0.08]">
           {listing.zone}
         </span>
       )}
@@ -141,12 +162,12 @@ const DrawerMapsLinks: React.FC<{ readonly listing: RentalListing }> = ({ listin
           href={societyUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-lg bg-indigo-950/70 hover:bg-indigo-900/80 text-indigo-300 border border-indigo-500/40 transition-colors"
+          className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-md bg-[#09090B] hover:bg-[#18181C] text-zinc-200 border border-white/[0.08] transition-colors"
           title={`Open ${e.societyName} in Google Maps`}
         >
-          <MapPin className="w-3 h-3 text-indigo-400 shrink-0" />
+          <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
           <span>{e.societyName}</span>
-          <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+          <ExternalLink className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
         </a>
       )}
 
@@ -154,12 +175,12 @@ const DrawerMapsLinks: React.FC<{ readonly listing: RentalListing }> = ({ listin
         href={localityUrl}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-emerald-300 border border-emerald-500/40 transition-colors"
+        className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-md bg-[#09090B] hover:bg-[#18181C] text-zinc-200 border border-white/[0.08] transition-colors"
         title={`Open ${listing.location} in Google Maps`}
       >
-        <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+        <MapPin className="w-3 h-3 text-zinc-400 shrink-0" />
         <span>{listing.location}</span>
-        <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+        <ExternalLink className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
       </a>
 
       {landmarkUrl && landmark && (
@@ -167,12 +188,11 @@ const DrawerMapsLinks: React.FC<{ readonly listing: RentalListing }> = ({ listin
           href={landmarkUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 transition-colors"
+          className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-md bg-[#09090B] hover:bg-[#18181C] text-zinc-400 border border-white/[0.07] transition-colors"
           title={`Open ${landmark} in Google Maps`}
         >
-          <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
+          <MapPin className="w-3 h-3 text-zinc-500 shrink-0" />
           <span>{landmark}</span>
-          <ExternalLink className="w-2.5 h-2.5 shrink-0" />
         </a>
       )}
     </div>
@@ -185,22 +205,12 @@ const DrawerPhotoCarousel: React.FC<{ readonly images: readonly string[] }> = ({
   const [activeImgIdx, setActiveImgIdx] = useState(0);
 
   if (images.length === 0) {
-    return (
-      <div className="p-8 rounded-2xl bg-slate-950/60 border border-slate-800 text-center space-y-2">
-        <Building2 className="w-8 h-8 text-slate-600 mx-auto" />
-        <div className="text-xs font-semibold text-slate-400">
-          No direct photo uploads found in this Facebook post
-        </div>
-        <p className="text-[11px] text-slate-500">
-          Check original Facebook post or contact the owner via WhatsApp to request photos.
-        </p>
-      </div>
-    );
+    return null;
   }
 
   return (
     <div className="space-y-2">
-      <div className="relative aspect-video rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner group">
+      <div className="relative aspect-video rounded-xl overflow-hidden bg-[#09090B] border border-white/[0.08] group">
         <img
           src={images[activeImgIdx]}
           alt="Rental Listing"
@@ -215,7 +225,7 @@ const DrawerPhotoCarousel: React.FC<{ readonly images: readonly string[] }> = ({
               onClick={() =>
                 setActiveImgIdx((prev) => (prev > 0 ? prev - 1 : images.length - 1))
               }
-              className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-950/80 hover:bg-slate-950 text-white border border-slate-700 shadow-lg transition-[transform,background-color] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-zinc-950/80 hover:bg-zinc-950 text-white border border-white/15 shadow-lg transition-[transform,background-color] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -225,11 +235,11 @@ const DrawerPhotoCarousel: React.FC<{ readonly images: readonly string[] }> = ({
               onClick={() =>
                 setActiveImgIdx((prev) => (prev < images.length - 1 ? prev + 1 : 0))
               }
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-slate-950/80 hover:bg-slate-950 text-white border border-slate-700 shadow-lg transition-[transform,background-color] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-zinc-950/80 hover:bg-zinc-950 text-white border border-white/15 shadow-lg transition-[transform,background-color] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
-            <div className="absolute bottom-2 right-2 bg-slate-950/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-mono tabular-nums text-white border border-slate-700">
+            <div className="absolute bottom-2 right-2 bg-zinc-950/90 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-mono tabular-nums text-zinc-200 border border-white/10">
               {activeImgIdx + 1} / {images.length}
             </div>
           </>
@@ -244,7 +254,7 @@ const DrawerPhotoCarousel: React.FC<{ readonly images: readonly string[] }> = ({
               type="button"
               aria-label={`Select thumbnail ${idx + 1}`}
               onClick={() => setActiveImgIdx(idx)}
-              className={`w-14 h-14 rounded-xl overflow-hidden shrink-0 border-2 transition-[border-color,opacity,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+              className={`w-14 h-14 rounded-lg overflow-hidden shrink-0 border-2 transition-[border-color,opacity,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                 idx === activeImgIdx
                   ? 'border-emerald-400 scale-105'
                   : 'border-transparent opacity-60 hover:opacity-100'
@@ -259,6 +269,58 @@ const DrawerPhotoCarousel: React.FC<{ readonly images: readonly string[] }> = ({
   );
 };
 
+const DrawerProvenancePanel: React.FC<{ readonly listing: RentalListing }> = ({ listing }) => {
+  const scrapedIST = formatDrawerScrapedTimeIST(listing.createdAt);
+  const allGroups = listing.groupNames && listing.groupNames.length > 0
+    ? listing.groupNames
+    : [listing.groupName];
+
+  return (
+    <div className="p-3.5 rounded-xl bg-[#09090B] border border-white/[0.07] space-y-2.5 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-[#141418] border border-white/[0.08] flex items-center justify-center text-zinc-300 font-semibold shrink-0">
+            <User className="w-4 h-4 text-zinc-400" />
+          </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-zinc-100 truncate">{listing.authorName}</div>
+            <div className="text-[11px] text-zinc-400 font-mono tabular-nums flex items-center gap-1.5 flex-wrap">
+              <span className="inline-flex items-center gap-1 text-emerald-400">
+                <Clock className="w-3 h-3" /> Posted {listing.postedTime}
+              </span>
+              <span className="text-zinc-600">·</span>
+              <span>Scraped {scrapedIST}</span>
+            </div>
+          </div>
+        </div>
+
+        <a
+          href={listing.postUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 font-semibold text-xs transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] shrink-0"
+        >
+          <span>View Post</span>
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
+      </div>
+
+      <div className="pt-2 border-t border-white/[0.05] flex items-center gap-1.5 flex-wrap text-[11px] text-zinc-400">
+        <Layers className="w-3 h-3 text-zinc-500 shrink-0" />
+        <span>Source Group{allGroups.length > 1 ? 's' : ''}:</span>
+        {allGroups.map((grp) => (
+          <span
+            key={grp}
+            className="px-2 py-0.5 rounded bg-[#141418] text-zinc-300 border border-white/[0.06]"
+          >
+            {grp}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const DrawerCommutePanel: React.FC<{ readonly listing: RentalListing }> = ({
   listing,
 }) => {
@@ -269,60 +331,60 @@ const DrawerCommutePanel: React.FC<{ readonly listing: RentalListing }> = ({
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
-          <div className="text-[11px] text-slate-400 font-medium">Monthly Rent</div>
-          <div className="text-2xl font-black font-mono tabular-nums text-emerald-400">
-            {e.rent ? `₹${e.rent.toLocaleString('en-IN')}` : 'Contact for Rent'}
+        <div className="p-3.5 rounded-xl bg-[#09090B] border border-white/[0.07] space-y-1">
+          <div className="text-[11px] text-zinc-400 font-medium">Monthly Rent</div>
+          <div className="text-xl font-semibold font-mono tabular-nums text-zinc-50">
+            {e.rent ? `₹${e.rent.toLocaleString('en-IN')}` : 'See post text'}
           </div>
-          <div className="text-[10px] text-slate-500 font-mono">per calendar month</div>
+          <div className="text-[10px] text-zinc-500 font-mono">per calendar month</div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1">
-          <div className="text-[11px] text-slate-400 font-medium">Security Deposit</div>
-          <div className="text-xl font-black font-mono tabular-nums text-white">
+        <div className="p-3.5 rounded-xl bg-[#09090B] border border-white/[0.07] space-y-1">
+          <div className="text-[11px] text-zinc-400 font-medium">Security Deposit</div>
+          <div className="text-xl font-semibold font-mono tabular-nums text-zinc-50">
             {e.deposit ? `₹${e.deposit.toLocaleString('en-IN')}` : 'Negotiable'}
           </div>
-          <div className="text-[10px] text-slate-400 font-mono tabular-nums">
+          <div className="text-[10px] text-zinc-400 font-mono tabular-nums">
             {depositMultiple ? `${depositMultiple}x monthly rent` : 'Standard terms'}
           </div>
         </div>
       </div>
 
-      <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+      <div className="p-3.5 rounded-xl bg-[#09090B] border border-white/[0.07] space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Compass className="w-4 h-4 text-cyan-400" />
-            <span className="text-xs font-bold text-slate-200">
+            <Compass className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-semibold text-zinc-200">
               Prestige Tech Park (PTP) Commute
             </span>
           </div>
-          <span className="text-xs font-mono tabular-nums font-bold text-cyan-400">
+          <span className="text-xs font-mono tabular-nums font-semibold text-emerald-400">
             {listing.commute.twoWayAvgPeakMins}m average peak
           </span>
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-            <div className="text-[10px] text-slate-400 font-medium">Morning 11am</div>
-            <div className="text-sm font-bold font-mono tabular-nums text-white mt-0.5">
+          <div className="p-2 rounded-lg bg-[#141418] border border-white/[0.06]">
+            <div className="text-[10px] text-zinc-400 font-medium">Morning 11am</div>
+            <div className="text-sm font-semibold font-mono tabular-nums text-zinc-100 mt-0.5">
               {listing.commute.inboundMins} mins
             </div>
           </div>
-          <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-            <div className="text-[10px] text-slate-400 font-medium">Evening 5pm</div>
-            <div className="text-sm font-bold font-mono tabular-nums text-white mt-0.5">
+          <div className="p-2 rounded-lg bg-[#141418] border border-white/[0.06]">
+            <div className="text-[10px] text-zinc-400 font-medium">Evening 5pm</div>
+            <div className="text-sm font-semibold font-mono tabular-nums text-zinc-100 mt-0.5">
               {listing.commute.outboundMins} mins
             </div>
           </div>
-          <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-            <div className="text-[10px] text-slate-400 font-medium">Distance</div>
-            <div className="text-sm font-bold font-mono tabular-nums text-white mt-0.5">
+          <div className="p-2 rounded-lg bg-[#141418] border border-white/[0.06]">
+            <div className="text-[10px] text-zinc-400 font-medium">Distance</div>
+            <div className="text-sm font-semibold font-mono tabular-nums text-zinc-100 mt-0.5">
               {listing.commute.distanceKm} km
             </div>
           </div>
         </div>
 
-        <div className="text-[11px] flex items-center gap-2 pt-1">
+        <div className="text-[11px] flex items-center gap-2 pt-0.5">
           {e.isKadubeesanahalliDirect ? (
             <span className="text-emerald-400 flex items-center gap-1 font-medium">
               <Check className="w-3.5 h-3.5" /> Direct PTP/Cessna side (Bypasses Panathur underpass bottleneck)
@@ -344,62 +406,56 @@ const DrawerSpecsSection: React.FC<{ readonly listing: RentalListing }> = ({ lis
 
   return (
     <div className="space-y-2">
-      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-        Verified Property Specs
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+        Property Specs
       </h4>
-      <div className="flex flex-wrap gap-2 text-xs">
+      <div className="flex flex-wrap gap-1.5 text-xs">
         {e.isBrokerage ? (
-          <span className="px-3 py-1.5 rounded-xl bg-rose-950/60 text-rose-300 border border-rose-500/30 flex items-center gap-1.5 font-medium">
+          <span className="px-2.5 py-1 rounded-lg bg-rose-950/40 text-rose-300 border border-rose-500/30 flex items-center gap-1.5 font-medium">
             Broker Fee Applicable
           </span>
         ) : (
-          <span className="px-3 py-1.5 rounded-xl bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 font-bold shadow-sm">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" /> Zero Brokerage / Direct Owner
+          <span className="px-2.5 py-1 rounded-lg bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 font-medium">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Direct Owner / Zero Brokerage
           </span>
         )}
 
-        <span
-          className={`px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-medium ${
-            waterInfo.isCauvery
-              ? 'bg-cyan-950/60 text-cyan-300 border-cyan-500/40'
-              : 'bg-slate-900 text-slate-300 border-slate-700'
-          }`}
-        >
-          <Droplets className="w-4 h-4 text-cyan-400" />
+        <span className="px-2.5 py-1 rounded-lg bg-[#141418] text-zinc-300 border border-white/[0.07] flex items-center gap-1.5">
+          <Droplets className="w-3.5 h-3.5 text-zinc-400" />
           {waterInfo.label}
         </span>
 
-        <span className="px-3 py-1.5 rounded-xl bg-slate-900 text-slate-300 border border-slate-700">
+        <span className="px-2.5 py-1 rounded-lg bg-[#141418] text-zinc-300 border border-white/[0.07]">
           {e.furnishing}
         </span>
 
         {e.isGatedSociety && (
-          <span className="px-3 py-1.5 rounded-xl bg-indigo-950/60 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
-            <Building2 className="w-4 h-4 text-indigo-400" /> Gated Society
+          <span className="px-2.5 py-1 rounded-lg bg-[#141418] text-zinc-300 border border-white/[0.07] flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-zinc-400" /> Gated Society
           </span>
         )}
 
         {e.hasSwimmingPool && (
-          <span className="px-3 py-1.5 rounded-xl bg-blue-950/60 text-blue-300 border border-blue-500/30 flex items-center gap-1.5">
-            <Waves className="w-4 h-4 text-blue-400" /> Swimming Pool
+          <span className="px-2.5 py-1 rounded-lg bg-[#141418] text-zinc-300 border border-white/[0.07] flex items-center gap-1.5">
+            <Waves className="w-3.5 h-3.5 text-zinc-400" /> Swimming Pool
           </span>
         )}
 
         {e.hasPowerBackup && (
-          <span className="px-3 py-1.5 rounded-xl bg-amber-950/60 text-amber-300 border border-amber-500/30 flex items-center gap-1.5">
-            <Zap className="w-4 h-4 text-amber-400" /> 100% Generator Backup
+          <span className="px-2.5 py-1 rounded-lg bg-[#141418] text-zinc-300 border border-white/[0.07] flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5 text-zinc-400" /> 100% Generator Backup
           </span>
         )}
 
         {e.hasAttachedWashroom && (
-          <span className="px-3 py-1.5 rounded-xl bg-teal-950/60 text-teal-300 border border-teal-500/30 flex items-center gap-1.5">
-            <Bath className="w-4 h-4 text-teal-400" /> Attached Washroom
+          <span className="px-2.5 py-1 rounded-lg bg-[#141418] text-zinc-300 border border-white/[0.07] flex items-center gap-1.5">
+            <Bath className="w-3.5 h-3.5 text-zinc-400" /> Attached Washroom
           </span>
         )}
 
         {e.isVegetarianOnly && (
-          <span className="px-3 py-1.5 rounded-xl bg-amber-950/60 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 font-medium">
-            <Leaf className="w-4 h-4 text-amber-400" /> Strict Vegetarian Only
+          <span className="px-2.5 py-1 rounded-lg bg-amber-950/40 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 font-medium">
+            <Leaf className="w-3.5 h-3.5 text-amber-400" /> Strict Vegetarian Only
           </span>
         )}
       </div>
@@ -424,13 +480,13 @@ const DrawerPostAndContactSection: React.FC<{ readonly listing: RentalListing }>
     <>
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-bold uppercase tracking-wider text-slate-400">
+          <span className="font-semibold uppercase tracking-wider text-zinc-400 text-[11px]">
             Original Facebook Post Text
           </span>
           <button
             type="button"
             onClick={() => handleCopyText(listing.rawText)}
-            className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold transition-colors duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+            className="flex items-center gap-1 text-[11px] text-zinc-300 hover:text-zinc-100 font-medium transition-colors duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
           >
             {isCopied ? (
               <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -440,18 +496,18 @@ const DrawerPostAndContactSection: React.FC<{ readonly listing: RentalListing }>
             <span>{isCopied ? 'Copied!' : 'Copy Text'}</span>
           </button>
         </div>
-        <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 leading-relaxed whitespace-pre-line font-sans shadow-inner">
+        <div className="p-3.5 rounded-xl bg-[#09090B] border border-white/[0.07] text-[13px] text-zinc-300 leading-relaxed whitespace-pre-line font-sans">
           {listing.rawText}
         </div>
       </div>
 
       {e.contactPhone && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/60 to-teal-950/50 border border-emerald-500/40 flex items-center justify-between">
+        <div className="p-3.5 rounded-xl bg-[#09090B] border border-white/[0.08] flex items-center justify-between">
           <div>
-            <span className="text-[11px] text-emerald-300 font-medium block">
+            <span className="text-[11px] text-zinc-400 font-medium block">
               Direct Contact Number
             </span>
-            <span className="text-base font-mono tabular-nums font-bold text-white tracking-wider">
+            <span className="text-base font-mono tabular-nums font-semibold text-zinc-100 tracking-wider">
               +91 {e.contactPhone}
             </span>
           </div>
@@ -459,7 +515,7 @@ const DrawerPostAndContactSection: React.FC<{ readonly listing: RentalListing }>
             <a
               href={`tel:${e.contactPhone}`}
               onClick={() => toast.info(`Calling +91 ${e.contactPhone}`)}
-              className="px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              className="px-3 py-1.5 rounded-lg bg-[#18181C] hover:bg-zinc-800 text-zinc-100 border border-white/[0.08] font-medium text-xs flex items-center gap-1.5 transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
             >
               <Phone className="w-3.5 h-3.5" /> Call
             </a>
@@ -472,7 +528,7 @@ const DrawerPostAndContactSection: React.FC<{ readonly listing: RentalListing }>
               target="_blank"
               rel="noreferrer"
               onClick={() => toast.info(`Opening WhatsApp for +91 ${e.contactPhone}`)}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-xs flex items-center gap-1.5 transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
             >
               <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
             </a>
@@ -486,29 +542,12 @@ const DrawerPostAndContactSection: React.FC<{ readonly listing: RentalListing }>
 const STATUS_OPTIONS: readonly {
   readonly id: UserListingStatus;
   readonly label: string;
-  readonly color: string;
 }[] = [
-  { id: 'new', label: 'New', color: 'bg-slate-800 text-slate-300 border-slate-700' },
-  {
-    id: 'interested',
-    label: '⭐ Interested',
-    color: 'bg-amber-950/80 text-amber-300 border-amber-500/50',
-  },
-  {
-    id: 'called',
-    label: '📞 Called',
-    color: 'bg-blue-950/80 text-blue-300 border-blue-500/50',
-  },
-  {
-    id: 'applied',
-    label: '📝 Applied',
-    color: 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50',
-  },
-  {
-    id: 'rejected',
-    label: '❌ Rejected',
-    color: 'bg-rose-950/80 text-rose-300 border-rose-500/50',
-  },
+  { id: 'new', label: 'New' },
+  { id: 'interested', label: 'Interested' },
+  { id: 'called', label: 'Called' },
+  { id: 'applied', label: 'Applied' },
+  { id: 'rejected', label: 'Rejected' },
 ];
 
 const DrawerFooterBar: React.FC<{
@@ -522,19 +561,19 @@ const DrawerFooterBar: React.FC<{
   };
 
   return (
-    <div className="p-4 bg-slate-950 border-t border-slate-800 space-y-3">
+    <div className="p-4 bg-[#0C0C0F] border-t border-white/[0.07] space-y-3">
       <div className="flex items-center justify-between gap-1.5">
-        <span className="text-[11px] text-slate-400 font-semibold shrink-0">Pipeline:</span>
+        <span className="text-[11px] text-zinc-400 font-medium shrink-0">Pipeline:</span>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
           {STATUS_OPTIONS.map((opt) => (
             <button
               key={opt.id}
               type="button"
               onClick={() => handleStatusSelect(opt.id)}
-              className={`px-2.5 py-1 rounded-xl text-xs font-semibold border transition-[color,background-color,border-color,box-shadow,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-[color,background-color,border-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] ${
                 listing.userStatus === opt.id
-                  ? `${opt.color} ring-2 ring-emerald-500/40 scale-105 font-bold`
-                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
+                  ? 'bg-zinc-100 text-zinc-950 border-zinc-200 font-semibold'
+                  : 'bg-[#141418] text-zinc-400 border-white/[0.07] hover:text-zinc-200'
               }`}
             >
               {opt.label}
@@ -547,9 +586,9 @@ const DrawerFooterBar: React.FC<{
         <button
           type="button"
           onClick={() => onOpenScoreModal(listing)}
-          className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+          className="flex-1 py-2 rounded-lg bg-[#141418] hover:bg-zinc-800 text-zinc-200 border border-white/[0.08] font-medium text-xs flex items-center justify-center gap-1.5 transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
         >
-          <Sparkles className="w-4 h-4 text-emerald-400" />
+          <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
           <span>Score Breakdown</span>
         </button>
 
@@ -557,10 +596,10 @@ const DrawerFooterBar: React.FC<{
           href={listing.postUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 transition-[background-color,transform,box-shadow] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+          className="flex-1 py-2 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 font-semibold text-xs flex items-center justify-center gap-1.5 transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
         >
-          <ExternalLink className="w-4 h-4" />
-          <span>Facebook Post</span>
+          <ExternalLink className="w-3.5 h-3.5" />
+          <span>Open Facebook Post</span>
         </a>
       </div>
     </div>
@@ -631,30 +670,30 @@ const DrawerPanelContent: React.FC<DrawerContentProps> = ({
         transform: touchDeltaY > 0 ? `translateY(${touchDeltaY}px)` : undefined,
         transition: isDragging ? 'none' : 'transform 260ms var(--ease-drawer)',
       }}
-      className="relative z-10 w-full md:max-w-xl h-full bg-slate-900 border-t md:border-t-0 md:border-l border-slate-700/80 shadow-2xl flex flex-col justify-between overflow-hidden fixed md:static inset-x-0 bottom-0 md:inset-auto max-h-[92vh] md:max-h-full rounded-t-3xl md:rounded-t-none"
+      className="relative z-10 w-full md:max-w-xl h-full bg-[#111114] border-t md:border-t-0 md:border-l border-white/[0.09] shadow-2xl flex flex-col justify-between overflow-hidden fixed md:static inset-x-0 bottom-0 md:inset-auto max-h-[92vh] md:max-h-full rounded-t-2xl md:rounded-t-none"
     >
       <div
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="w-full py-3 flex justify-center cursor-grab active:cursor-grabbing md:hidden select-none bg-slate-900 border-b border-slate-800/60"
+        className="w-full py-2.5 flex justify-center cursor-grab active:cursor-grabbing md:hidden select-none bg-[#111114] border-b border-white/[0.06]"
       >
-        <div className="w-12 h-1.5 bg-slate-700 rounded-full" />
+        <div className="w-10 h-1 bg-zinc-700 rounded-full" />
       </div>
 
-      <div className="overflow-y-auto flex-1 p-5 md:p-6 space-y-6">
+      <div className="overflow-y-auto flex-1 p-5 space-y-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40">
+              <span className="text-xs font-medium px-2 py-0.5 rounded bg-[#18181C] text-zinc-200 border border-white/[0.08]">
                 {listing.bhkType}
               </span>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-zinc-400">
                 {e.societyName ? `in ${e.societyName}` : listing.location}
               </span>
             </div>
-            <h2 className="text-xl font-black text-white mt-1 leading-snug">
-              {e.societyName || `${listing.location} (near PTP)`}
+            <h2 className="text-lg font-semibold tracking-[-0.015em] text-zinc-50 mt-1 leading-snug">
+              {e.societyName || listing.location}
             </h2>
             <DrawerMapsLinks listing={listing} />
           </div>
@@ -669,47 +708,15 @@ const DrawerPanelContent: React.FC<DrawerContentProps> = ({
               type="button"
               aria-label="Close drawer"
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              className="p-1.5 rounded-lg bg-[#18181C] hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 border border-white/[0.07] transition-colors duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
               title="Close drawer"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-950/60 to-indigo-950/50 border border-blue-500/30 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-600/30 border border-blue-400/30 flex items-center justify-center text-blue-400 font-bold shrink-0">
-              FB
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 font-semibold text-white">
-                <User className="w-3.5 h-3.5 text-blue-400" />
-                <span>{listing.authorName}</span>
-                <span className="text-[10px] text-blue-300 bg-blue-900/60 px-1.5 py-0.2 rounded border border-blue-500/30">
-                  Verified Post
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-300 flex items-center gap-2 mt-0.5">
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-cyan-400" /> {listing.postedTime}
-                </span>
-                <span>•</span>
-                <span className="truncate max-w-[150px]">{listing.groupName}</span>
-              </div>
-            </div>
-          </div>
-
-          <a
-            href={listing.postUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] shrink-0 shadow-md shadow-blue-600/20"
-          >
-            <span>View Post</span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        </div>
+        <DrawerProvenancePanel listing={listing} />
 
         <DrawerPhotoCarousel images={images} />
 
@@ -759,7 +766,7 @@ export const ListingDrawer: React.FC<ListingDrawerProps> = ({
       open
       aria-modal="true"
       aria-label={`Listing inspection for ${listing.entities.societyName || listing.location}`}
-      className="fixed inset-0 z-50 m-0 h-full w-full max-w-none max-h-none bg-slate-950/80 backdrop-blur-md flex justify-end border-0 p-0"
+      className="fixed inset-0 z-50 m-0 h-full w-full max-w-none max-h-none bg-zinc-950/80 backdrop-blur-sm flex justify-end border-0 p-0"
     >
       <button
         type="button"

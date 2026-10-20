@@ -7,7 +7,6 @@ import {
   buildLocalityMapsUrl,
 } from '../../domain/types';
 import { RatingBadge } from './RatingBadge';
-import { CommutePill } from './CommutePill';
 import { detectWaterSource } from './ListingDrawer';
 import { toast } from './ToastStack';
 import {
@@ -19,7 +18,6 @@ import {
   Phone,
   MessageCircle,
   Clock,
-  User,
   Layers,
   ChevronDown,
   ChevronUp,
@@ -31,9 +29,81 @@ import {
   Droplets,
   Eye,
   MapPin,
+  Bike,
 } from 'lucide-react';
 
-interface ListingCardProps {
+const CARD_IST_FORMATTER = new Intl.DateTimeFormat('en-IN', {
+  day: '2-digit',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: true,
+  timeZone: 'Asia/Kolkata',
+});
+
+function formatListingTimestampIST(createdAt: string | undefined): string {
+  if (!createdAt) return '';
+  const normalized = createdAt.includes('T')
+    ? createdAt
+    : `${createdAt.replace(' ', 'T')}Z`;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return createdAt;
+  return CARD_IST_FORMATTER.format(parsed);
+}
+
+function cleanDisplayDescription(
+  rawText: string,
+  groupName: string,
+  authorName: string,
+): string {
+  if (!rawText) return '';
+  const groupLower = groupName.trim().toLowerCase();
+  const authorLower = authorName.trim().toLowerCase();
+
+  let cleaned = rawText
+    .replace(/Shared with Public group/gi, '')
+    .replace(/Shared with Members/gi, '')
+    .replace(/󰞋/g, '');
+
+  const rawLines = cleaned
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  let startIndex = 0;
+  while (startIndex < rawLines.length && startIndex < 6) {
+    const candidate = rawLines[startIndex];
+    if (!candidate) break;
+    const lower = candidate.toLowerCase();
+    const isGroupHeader =
+      (groupLower.length > 2 && (lower === groupLower || groupLower.includes(lower))) ||
+      /^flat\s*(and|&)\s*flatmates/i.test(candidate);
+    const isAuthorHeader =
+      authorLower.length > 1 &&
+      authorLower !== 'facebook member' &&
+      (lower === authorLower || lower.startsWith(`${authorLower} ·`));
+    const isMetaNoise =
+      /^(top contributor|admin|moderator|follow|join|\d+\s*(m|min|mins|h|hr|hrs|d|day|days|w|wk|wks)\s*[·•]?|[·•\s]+)$/i.test(
+        candidate,
+      );
+
+    if (isGroupHeader || isAuthorHeader || isMetaNoise) {
+      startIndex += 1;
+    } else {
+      break;
+    }
+  }
+
+  const remaining = rawLines.slice(startIndex).join('\n').trim();
+  const finalResult = (remaining || cleaned.trim())
+    .replace(/^(?:\d+\s*(?:m|min|mins|h|hr|hrs|d|day|days|w|wk|wks)\s*[·•]\s*)+/i, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return finalResult || rawText.trim();
+}
+
+export interface ListingCardProps {
   readonly listing: RentalListing;
   readonly onStatusChange: (id: number, status: UserListingStatus) => void;
   readonly onOpenScoreModal: (listing: RentalListing) => void;
@@ -48,7 +118,6 @@ interface PhotoBannerProps {
   readonly onPrev: (ev: React.MouseEvent) => void;
   readonly onNext: (ev: React.MouseEvent) => void;
   readonly onOpenLightbox: () => void;
-  readonly onQuickInspect?: (() => void) | undefined;
 }
 
 const ListingPhotoBanner: React.FC<PhotoBannerProps> = ({
@@ -59,30 +128,13 @@ const ListingPhotoBanner: React.FC<PhotoBannerProps> = ({
   onPrev,
   onNext,
   onOpenLightbox,
-  onQuickInspect,
 }) => {
   if (images.length === 0) {
-    return (
-      <div className="relative mb-4 rounded-xl overflow-hidden bg-slate-900/60 aspect-video border border-slate-800/80 shadow-inner flex flex-col items-center justify-center p-4 text-center group/img">
-        <Building2 className="w-8 h-8 text-slate-600 mb-1.5 transition-transform duration-300 group-hover/img:scale-110" />
-        <span className="text-[11px] font-medium text-slate-400">
-          No direct photo uploads attached in post
-        </span>
-        {onQuickInspect && (
-          <button
-            type="button"
-            onClick={onQuickInspect}
-            className="mt-2 text-[10px] font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800/80 border border-slate-700/80 hover:border-cyan-500/40 transition-[background-color,border-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
-          >
-            <Eye className="w-3 h-3" /> Quick Inspect
-          </button>
-        )}
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className="relative mb-4 rounded-xl overflow-hidden bg-slate-900 aspect-video border border-slate-800 shadow-inner group/img">
+    <div className="relative mb-3 rounded-lg overflow-hidden bg-[#09090B] h-40 border border-white/[0.07] group/img">
       <button
         type="button"
         aria-label={`Open full screen photo of ${title}`}
@@ -92,7 +144,7 @@ const ListingPhotoBanner: React.FC<PhotoBannerProps> = ({
         <img
           src={images[activeImageIdx]}
           alt={title}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105 cursor-pointer"
+          className="w-full h-full object-cover transition-transform duration-200 ease-[var(--ease-out)] group-hover/img:scale-[1.02] cursor-pointer"
           loading="lazy"
           onError={(ev) => {
             (ev.target as HTMLElement).style.display = 'none';
@@ -107,7 +159,7 @@ const ListingPhotoBanner: React.FC<PhotoBannerProps> = ({
           ev.stopPropagation();
           onOpenLightbox();
         }}
-        className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/10 opacity-0 group-hover/img:opacity-100 transition-opacity duration-140 ease-[var(--ease-out)] active:scale-[0.97] z-10"
+        className="absolute top-2 right-2 p-1.5 rounded-md bg-black/70 hover:bg-black/90 text-zinc-100 backdrop-blur-md border border-white/10 opacity-0 group-hover/img:opacity-100 transition-opacity duration-140 ease-[var(--ease-out)] active:scale-[0.97] z-10"
         title="View full screen photo"
       >
         <Maximize2 className="w-3.5 h-3.5" />
@@ -119,27 +171,27 @@ const ListingPhotoBanner: React.FC<PhotoBannerProps> = ({
             type="button"
             aria-label="Previous photo"
             onClick={onPrev}
-            className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/70 hover:bg-black/90 text-white backdrop-blur-md border border-white/20 shadow-lg hover:scale-110 active:scale-[0.97] transition-[transform,background-color] duration-140 ease-[var(--ease-out)] z-10"
+            className="absolute left-2 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/70 hover:bg-black/90 text-white backdrop-blur-md border border-white/15 active:scale-[0.97] transition-[transform,background-color] duration-140 ease-[var(--ease-out)] z-10"
             title="Previous photo"
           >
-            <ChevronLeft className="w-4 h-4" />
+            <ChevronLeft className="w-3.5 h-3.5" />
           </button>
 
           <button
             type="button"
             aria-label="Next photo"
             onClick={onNext}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/70 hover:bg-black/90 text-white backdrop-blur-md border border-white/20 shadow-lg hover:scale-110 active:scale-[0.97] transition-[transform,background-color] duration-140 ease-[var(--ease-out)] z-10"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/70 hover:bg-black/90 text-white backdrop-blur-md border border-white/15 active:scale-[0.97] transition-[transform,background-color] duration-140 ease-[var(--ease-out)] z-10"
             title="Next photo"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-3.5 h-3.5" />
           </button>
 
-          <div className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-slate-950/85 backdrop-blur-md px-2.5 py-0.5 rounded-full text-[10px] font-mono tabular-nums text-slate-300 border border-slate-700 z-10 shadow-md">
+          <div className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-zinc-950/85 backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-mono tabular-nums text-zinc-300 border border-white/10 z-10">
             <span>
               {activeImageIdx + 1}/{images.length}
             </span>
-            <div className="flex gap-1 ml-1">
+            <div className="flex gap-1 ml-0.5">
               {images.map((imgUrl, idx) => (
                 <button
                   key={imgUrl}
@@ -151,8 +203,8 @@ const ListingPhotoBanner: React.FC<PhotoBannerProps> = ({
                   }}
                   className={`w-1.5 h-1.5 rounded-full transition-[width,background-color] duration-160 ease-[var(--ease-out)] ${
                     idx === activeImageIdx
-                      ? 'bg-emerald-400 w-3'
-                      : 'bg-slate-600 hover:bg-slate-400'
+                      ? 'bg-emerald-400 w-2.5'
+                      : 'bg-zinc-600 hover:bg-zinc-400'
                   }`}
                 />
               ))}
@@ -164,36 +216,196 @@ const ListingPhotoBanner: React.FC<PhotoBannerProps> = ({
   );
 };
 
-const ListingAuthorBar: React.FC<{ readonly listing: RentalListing }> = ({ listing }) => {
-  return (
-    <div className="flex items-center justify-between text-xs text-slate-400 pb-2.5 mb-3 border-b border-slate-800/60">
-      <div className="flex items-center gap-1.5 font-medium text-slate-300 truncate max-w-[150px]">
-        <User className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-        <span className="truncate">{listing.authorName}</span>
-      </div>
+const ListingHeaderMetaRow: React.FC<{
+  readonly listing: RentalListing;
+  readonly onOpenScoreModal: (listing: RentalListing) => void;
+}> = ({ listing, onOpenScoreModal }) => {
+  const scrapedIST = formatListingTimestampIST(listing.createdAt);
 
-      <div className="flex items-center gap-1.5">
-        {listing.postCount && listing.postCount > 1 && (
-          <span
-            className="inline-flex items-center gap-1 text-[10px] font-semibold bg-indigo-950/80 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded-full"
-            title={`Seen in ${listing.postCount} groups: ${(listing.groupNames || []).join(', ')}`}
-          >
-            <Layers className="w-2.5 h-2.5" /> Seen in {listing.postCount} groups
-          </span>
-        )}
+  return (
+    <div className="flex items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-white/[0.06] text-[11px]">
+      <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+        <span
+          className="px-2 py-0.5 rounded bg-[#18181C] text-zinc-300 border border-white/[0.06] font-medium truncate max-w-[165px]"
+          title={listing.groupName}
+        >
+          {listing.groupName}
+        </span>
 
         <a
           href={listing.postUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1 text-[11px] font-medium text-cyan-300 bg-slate-900/90 hover:bg-slate-800 px-2.5 py-0.5 rounded-full border border-cyan-500/30 shrink-0 transition-colors duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
-          title={`Verified Facebook Post • Published: ${listing.postedTime}`}
+          className="inline-flex items-center gap-1 text-[11px] font-mono tabular-nums text-zinc-400 hover:text-zinc-200 px-1.5 py-0.5 rounded bg-[#09090B] border border-white/[0.06] transition-colors duration-140"
+          title={`Published: ${listing.postedTime}${scrapedIST ? ` • Scraped: ${scrapedIST} IST` : ''}`}
         >
-          <Clock className="w-3 h-3 text-cyan-400 shrink-0" />
+          <Clock className="w-3 h-3 text-emerald-400 shrink-0" />
           <span>{listing.postedTime}</span>
-          <ExternalLink className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
+          {scrapedIST && (
+            <>
+              <span className="text-zinc-600">·</span>
+              <span className="text-zinc-400">{scrapedIST}</span>
+            </>
+          )}
         </a>
+
+        {listing.postCount && listing.postCount > 1 && (
+          <span
+            className="inline-flex items-center gap-1 text-[10px] font-mono tabular-nums font-medium bg-zinc-800/80 text-zinc-300 border border-white/[0.08] px-1.5 py-0.5 rounded"
+            title={`Seen in ${listing.postCount} groups: ${(listing.groupNames || []).join(', ')}`}
+          >
+            <Layers className="w-2.5 h-2.5 text-zinc-400" /> Seen in {listing.postCount} groups
+          </span>
+        )}
       </div>
+
+      <div className="shrink-0">
+        <RatingBadge
+          score={listing.score}
+          tier={listing.tier}
+          onClick={() => onOpenScoreModal(listing)}
+        />
+      </div>
+    </div>
+  );
+};
+
+const ListingTitleAndPriceRow: React.FC<{ readonly listing: RentalListing }> = ({ listing }) => {
+  const e = listing.entities;
+  const primaryTitle = e.societyName || listing.location;
+  const depositRatio =
+    e.rent && e.deposit && e.rent > 0 ? `${(e.deposit / e.rent).toFixed(1)}x dep` : null;
+
+  return (
+    <div className="flex items-start justify-between gap-3 mb-2.5">
+      <div className="min-w-0">
+        <h3 className="text-[16px] font-semibold tracking-[-0.015em] text-zinc-50 leading-snug truncate">
+          {primaryTitle}
+        </h3>
+        <div className="flex items-center gap-1.5 flex-wrap mt-1 text-xs text-zinc-400">
+          <span className="font-medium text-zinc-200 bg-[#18181C] border border-white/[0.07] px-1.5 py-0.5 rounded text-[11px]">
+            {listing.bhkType}
+          </span>
+          {e.societyName && <span>· {listing.location}</span>}
+          {listing.zone && <span className="text-zinc-500">· {listing.zone}</span>}
+        </div>
+      </div>
+
+      <div className="text-right shrink-0">
+        <div className="text-[18px] font-mono font-semibold tabular-nums text-zinc-50 leading-tight">
+          {e.rent ? `₹${e.rent.toLocaleString('en-IN')}/mo` : 'Rent in post'}
+        </div>
+        <div className="flex items-center justify-end gap-1.5 mt-1 text-[11px] font-mono tabular-nums text-zinc-400">
+          {depositRatio ? (
+            <span>{depositRatio}</span>
+          ) : e.deposit ? (
+            <span>Dep ₹{e.deposit.toLocaleString('en-IN')}</span>
+          ) : null}
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#09090B] border border-white/[0.07] text-zinc-300">
+            <Bike className="w-3 h-3 text-emerald-400" />
+            <span>{listing.commute.twoWayAvgPeakMins}m to PTP</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ListingExpandableDescription: React.FC<{
+  readonly rawText: string;
+  readonly groupName: string;
+  readonly authorName: string;
+}> = ({ rawText, groupName, authorName }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const displayDescription = cleanDisplayDescription(rawText, groupName, authorName);
+
+  return (
+    <div className="mb-3">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        onClick={() => setIsExpanded(!isExpanded)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsExpanded(!isExpanded);
+          }
+        }}
+        className="w-full text-left cursor-pointer bg-[#0C0C0F] hover:bg-[#0E0E12] border border-white/[0.06] hover:border-white/[0.12] rounded-lg p-2.5 transition-[border-color,background-color] duration-140 ease-[var(--ease-out)] focus:outline-none focus:border-zinc-500"
+      >
+        <p
+          className={`text-[13px] text-zinc-300 ${
+            !isExpanded ? 'line-clamp-2' : ''
+          } leading-relaxed whitespace-pre-line`}
+        >
+          {displayDescription}
+        </p>
+        <div className="flex items-center justify-between text-[11px] text-zinc-400 font-medium mt-1.5 pt-1.5 border-t border-white/[0.05]">
+          <span className="text-zinc-500 truncate max-w-[180px]">By {authorName}</span>
+          <span className="inline-flex items-center gap-1 text-zinc-300">
+            <span>{isExpanded ? 'Show less' : 'Read full description'}</span>
+            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ListingFeatureTags: React.FC<{ readonly listing: RentalListing }> = ({ listing }) => {
+  const e = listing.entities;
+  const waterInfo = detectWaterSource(listing.rawText);
+
+  const amenityTags: { readonly key: string; readonly label: string; readonly icon: React.ReactNode }[] = [];
+  if (e.isGatedSociety) {
+    amenityTags.push({ key: 'gated', label: 'Gated', icon: <Building2 className="w-3 h-3 text-zinc-400" /> });
+  }
+  if (e.hasSwimmingPool) {
+    amenityTags.push({ key: 'pool', label: 'Pool', icon: <Waves className="w-3 h-3 text-zinc-400" /> });
+  }
+  if (e.hasPowerBackup) {
+    amenityTags.push({ key: 'backup', label: 'Backup', icon: <Zap className="w-3 h-3 text-zinc-400" /> });
+  }
+  if (e.hasAttachedWashroom) {
+    amenityTags.push({ key: 'bath', label: 'Attached Bath', icon: <Bath className="w-3 h-3 text-zinc-400" /> });
+  }
+  if (waterInfo.isCauvery) {
+    amenityTags.push({ key: 'cauvery', label: 'Cauvery', icon: <Droplets className="w-3 h-3 text-zinc-400" /> });
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+      {e.isBrokerage ? (
+        <span className="px-2 py-0.5 rounded bg-rose-950/40 text-rose-300 border border-rose-500/25 font-medium">
+          Brokerage
+        </span>
+      ) : (
+        <span className="px-2 py-0.5 rounded bg-emerald-950/30 text-emerald-300 border border-emerald-500/25 font-medium">
+          Direct / No Broker
+        </span>
+      )}
+
+      {e.furnishing !== 'Unknown' && (
+        <span className="px-2 py-0.5 rounded bg-[#18181C] text-zinc-300 border border-white/[0.06]">
+          {e.furnishing}
+        </span>
+      )}
+
+      {amenityTags.map((tag) => (
+        <span
+          key={tag.key}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#18181C] text-zinc-300 border border-white/[0.06]"
+        >
+          {tag.icon} {tag.label}
+        </span>
+      ))}
+
+      {e.isVegetarianOnly && (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-500/25">
+          <Leaf className="w-3 h-3" /> Veg Only
+        </span>
+      )}
     </div>
   );
 };
@@ -210,24 +422,18 @@ const ListingMapsLinksRow: React.FC<{ readonly listing: RentalListing }> = ({ li
     : null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 mt-2">
-      {listing.zone && (
-        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-cyan-950/60 text-cyan-300 border border-cyan-500/30">
-          {listing.zone}
-        </span>
-      )}
-
+    <div className="flex flex-wrap items-center gap-1.5 mt-1.5 mb-3 text-[11px]">
       {societyUrl && e.societyName && (
         <a
           href={societyUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-indigo-950/60 hover:bg-indigo-900/70 text-indigo-300 border border-indigo-500/30 transition-colors"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#09090B] hover:bg-[#18181C] text-zinc-300 border border-white/[0.08] transition-colors"
           title={`Open ${e.societyName} in Google Maps`}
         >
-          <MapPin className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
-          <span className="truncate max-w-[130px]">{e.societyName}</span>
-          <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+          <MapPin className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+          <span className="truncate max-w-[110px]">{e.societyName}</span>
+          <ExternalLink className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
         </a>
       )}
 
@@ -235,12 +441,12 @@ const ListingMapsLinksRow: React.FC<{ readonly listing: RentalListing }> = ({ li
         href={localityUrl}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-emerald-500/30 transition-colors"
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#09090B] hover:bg-[#18181C] text-zinc-300 border border-white/[0.08] transition-colors"
         title={`Open ${listing.location} in Google Maps`}
       >
-        <MapPin className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+        <MapPin className="w-2.5 h-2.5 text-zinc-400 shrink-0" />
         <span>{listing.location}</span>
-        <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+        <ExternalLink className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
       </a>
 
       {landmarkUrl && landmark && (
@@ -248,118 +454,13 @@ const ListingMapsLinksRow: React.FC<{ readonly listing: RentalListing }> = ({ li
           href={landmarkUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-500/30 transition-colors"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#09090B] hover:bg-[#18181C] text-zinc-400 border border-white/[0.06] transition-colors"
           title={`Open ${landmark} in Google Maps`}
         >
-          <MapPin className="w-2.5 h-2.5 text-cyan-400 shrink-0" />
-          <span className="truncate max-w-[130px]">{landmark}</span>
-          <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+          <MapPin className="w-2.5 h-2.5 text-zinc-500 shrink-0" />
+          <span className="truncate max-w-[110px]">{landmark}</span>
         </a>
       )}
-    </div>
-  );
-};
-
-const ListingFeatureTags: React.FC<{ readonly listing: RentalListing }> = ({ listing }) => {
-  const e = listing.entities;
-  const waterInfo = detectWaterSource(listing.rawText);
-
-  return (
-    <div className="flex flex-wrap gap-1.5 mb-4">
-      {e.isBrokerage ? (
-        <span className="text-[11px] px-2 py-0.5 rounded bg-rose-950/40 text-rose-300 border border-rose-500/30 font-medium">
-          Broker Fee
-        </span>
-      ) : (
-        <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 font-medium">
-          Zero Brokerage
-        </span>
-      )}
-
-      {waterInfo.isCauvery ? (
-        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-cyan-950/50 text-cyan-300 border border-cyan-500/40 font-medium">
-          <Droplets className="w-3 h-3 text-cyan-400" /> Cauvery Water
-        </span>
-      ) : waterInfo.label !== 'Water Source Not Specified' ? (
-        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-          <Droplets className="w-3 h-3 text-cyan-400" /> {waterInfo.label}
-        </span>
-      ) : null}
-
-      {e.isVegetarianOnly && (
-        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-amber-950/50 text-amber-300 border border-amber-500/40 font-medium">
-          <Leaf className="w-3 h-3" /> Veg Only (-50)
-        </span>
-      )}
-
-      {e.isGatedSociety && (
-        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-indigo-950/40 text-indigo-300 border border-indigo-500/30">
-          <Building2 className="w-3 h-3" /> Gated
-        </span>
-      )}
-
-      {e.hasSwimmingPool && (
-        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-blue-950/40 text-blue-300 border border-blue-500/30">
-          <Waves className="w-3 h-3" /> Pool
-        </span>
-      )}
-
-      {e.hasPowerBackup && (
-        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-500/30">
-          <Zap className="w-3 h-3" /> 100% DG
-        </span>
-      )}
-
-      {e.hasAttachedWashroom ? (
-        <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-teal-950/40 text-teal-300 border border-teal-500/30">
-          <Bath className="w-3 h-3" /> Attached Bath
-        </span>
-      ) : (
-        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700">
-          Shared Bath (-15)
-        </span>
-      )}
-
-      {e.furnishing !== 'Unknown' && (
-        <span className="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-          {e.furnishing}
-        </span>
-      )}
-    </div>
-  );
-};
-
-const ListingExpandableDescription: React.FC<{ readonly rawText: string }> = ({ rawText }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <div className="mb-4">
-      <button
-        type="button"
-        role="button"
-        tabIndex={0}
-        aria-expanded={isExpanded}
-        onClick={() => setIsExpanded(!isExpanded)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            setIsExpanded(!isExpanded);
-          }
-        }}
-        className="w-full text-left cursor-pointer group/desc bg-slate-900/80 hover:bg-slate-900 border border-slate-800/90 hover:border-slate-700 rounded-xl p-3.5 transition-[border-color,background-color] duration-140 ease-[var(--ease-out)] focus:outline-none focus:border-cyan-500/50 shadow-inner"
-      >
-        <p
-          className={`text-xs text-slate-300 italic ${
-            !isExpanded ? 'line-clamp-2' : ''
-          } leading-relaxed whitespace-pre-line`}
-        >
-          "{rawText}"
-        </p>
-        <div className="flex items-center gap-1 text-[11px] text-cyan-400 font-semibold mt-2 pt-1 border-t border-slate-800/40">
-          <span>{isExpanded ? 'Show less' : 'Read full description'}</span>
-          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-        </div>
-      </button>
     </div>
   );
 };
@@ -367,15 +468,15 @@ const ListingExpandableDescription: React.FC<{ readonly rawText: string }> = ({ 
 function getStatusColor(status: UserListingStatus): string {
   switch (status) {
     case 'interested':
-      return 'text-amber-400 bg-amber-950/40 border-amber-500/40';
+      return 'text-amber-300 bg-amber-950/40 border-amber-500/30';
     case 'called':
-      return 'text-blue-400 bg-blue-950/40 border-blue-500/40';
+      return 'text-sky-300 bg-sky-950/40 border-sky-500/30';
     case 'applied':
-      return 'text-emerald-400 bg-emerald-950/40 border-emerald-500/40';
+      return 'text-emerald-300 bg-emerald-950/40 border-emerald-500/30';
     case 'rejected':
-      return 'text-rose-400 bg-rose-950/40 border-rose-500/40';
+      return 'text-rose-300 bg-rose-950/40 border-rose-500/30';
     default:
-      return 'text-slate-400 bg-slate-900 border-slate-700';
+      return 'text-zinc-300 bg-[#09090B] border-white/[0.08]';
   }
 }
 
@@ -393,33 +494,48 @@ const ListingCardFooter: React.FC<{
   };
 
   return (
-    <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+    <div className="pt-2.5 border-t border-white/[0.06] flex items-center justify-between gap-2">
       <select
         aria-label={`Status for ${cardTitle}`}
         value={listing.userStatus}
         onChange={(ev) => handleStatusChangeInternal(ev.target.value as UserListingStatus)}
-        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border focus:outline-none cursor-pointer transition-colors duration-140 ease-[var(--ease-out)] ${getStatusColor(
+        className={`text-[11px] font-medium px-2 py-1 rounded-lg border focus:outline-none cursor-pointer transition-colors duration-140 ease-[var(--ease-out)] ${getStatusColor(
           listing.userStatus,
         )}`}
       >
         <option value="new">Status: New</option>
-        <option value="interested">⭐ Interested</option>
-        <option value="called">📞 Called</option>
-        <option value="applied">📝 Applied</option>
-        <option value="rejected">❌ Rejected</option>
+        <option value="interested">Interested</option>
+        <option value="called">Called</option>
+        <option value="applied">Applied</option>
+        <option value="rejected">Rejected</option>
       </select>
 
       <div className="flex items-center gap-1.5">
+        {e.contactPhone && (
+          <button
+            type="button"
+            aria-label={`Copy phone number ${e.contactPhone}`}
+            onClick={() => {
+              navigator.clipboard.writeText(e.contactPhone ?? '');
+              toast.info(`Copied phone: +91 ${e.contactPhone}`);
+            }}
+            className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-[#09090B] hover:bg-[#18181C] text-zinc-300 border border-white/[0.07] font-mono tabular-nums text-[11px] transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+            title="Click to copy phone number"
+          >
+            <span>+91 {e.contactPhone}</span>
+          </button>
+        )}
+
         {onOpenDrawer && (
           <button
             type="button"
             aria-label={`Quick inspect ${cardTitle}`}
             onClick={() => onOpenDrawer(listing)}
-            className="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 transition-[background-color,border-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] flex items-center gap-1 text-xs font-semibold"
-            title="Quick inspect in drawer"
+            className="px-2 py-1 rounded-lg bg-[#18181C] hover:bg-zinc-800 text-zinc-200 border border-white/[0.08] transition-[background-color,border-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97] flex items-center gap-1 text-[11px] font-medium"
+            title="Inspect full post & commute details"
           >
-            <Eye className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline text-[11px]">Inspect</span>
+            <Eye className="w-3.5 h-3.5 text-zinc-400" />
+            <span>Inspect</span>
           </button>
         )}
 
@@ -435,19 +551,19 @@ const ListingCardFooter: React.FC<{
               rel="noreferrer"
               aria-label={`WhatsApp ${listing.authorName}`}
               onClick={() => toast.info(`Opening WhatsApp for +91 ${e.contactPhone}`)}
-              className="p-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              className="p-1.5 rounded-lg bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-400 border border-emerald-500/30 transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
               title={`WhatsApp ${listing.authorName}`}
             >
-              <MessageCircle className="w-4 h-4" />
+              <MessageCircle className="w-3.5 h-3.5" />
             </a>
             <a
               href={`tel:${e.contactPhone}`}
               aria-label={`Call ${listing.authorName}`}
               onClick={() => toast.info(`Calling +91 ${e.contactPhone}`)}
-              className="p-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-400 border border-cyan-500/30 transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              className="p-1.5 rounded-lg bg-[#18181C] hover:bg-zinc-800 text-zinc-200 border border-white/[0.08] transition-[background-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
               title={`Call ${listing.authorName}`}
             >
-              <Phone className="w-4 h-4" />
+              <Phone className="w-3.5 h-3.5" />
             </a>
           </>
         )}
@@ -457,10 +573,10 @@ const ListingCardFooter: React.FC<{
           target="_blank"
           rel="noreferrer"
           aria-label="Open Original Facebook Post"
-          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-[background-color,border-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+          className="p-1.5 rounded-lg bg-[#09090B] hover:bg-[#18181C] text-zinc-300 border border-white/[0.08] transition-[background-color,border-color,transform] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
           title="Open Original Facebook Post"
         >
-          <ExternalLink className="w-4 h-4" />
+          <ExternalLink className="w-3.5 h-3.5" />
         </a>
       </div>
     </div>
@@ -491,7 +607,7 @@ const ListingLightboxModal: React.FC<LightboxModalProps> = ({
       open
       aria-modal="true"
       aria-label={`Photo gallery for ${title}`}
-      className="fixed inset-0 z-50 m-0 h-full w-full max-w-none max-h-none bg-slate-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 transition-opacity duration-200 ease-[var(--ease-out)] border-0"
+      className="fixed inset-0 z-50 m-0 h-full w-full max-w-none max-h-none bg-zinc-950/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 transition-opacity duration-200 ease-[var(--ease-out)] border-0"
     >
       <button
         type="button"
@@ -500,10 +616,10 @@ const ListingLightboxModal: React.FC<LightboxModalProps> = ({
         className="absolute inset-0 w-full h-full cursor-default"
       />
 
-      <div className="absolute top-4 left-4 right-4 flex items-center justify-between text-white z-20 pointer-events-none">
+      <div className="absolute top-4 left-4 right-4 flex items-center justify-between text-zinc-100 z-20 pointer-events-none">
         <div className="text-sm font-semibold flex items-center gap-2 pointer-events-auto">
           <span>{title}</span>
-          <span className="text-slate-400 font-mono tabular-nums text-xs">
+          <span className="text-zinc-400 font-mono tabular-nums text-xs">
             ({activeImageIdx + 1} of {images.length})
           </span>
         </div>
@@ -511,7 +627,7 @@ const ListingLightboxModal: React.FC<LightboxModalProps> = ({
           type="button"
           aria-label="Close photo lightbox"
           onClick={onClose}
-          className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-700 text-white transition-colors duration-140 ease-[var(--ease-out)] active:scale-[0.97] pointer-events-auto"
+          className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-100 transition-colors duration-140 ease-[var(--ease-out)] active:scale-[0.97] pointer-events-auto"
           title="Close (Esc)"
         >
           <X className="w-5 h-5" />
@@ -522,7 +638,7 @@ const ListingLightboxModal: React.FC<LightboxModalProps> = ({
         <img
           src={images[activeImageIdx]}
           alt={title}
-          className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-slate-800"
+          className="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border border-white/10"
         />
 
         {images.length > 1 && (
@@ -531,7 +647,7 @@ const ListingLightboxModal: React.FC<LightboxModalProps> = ({
               type="button"
               aria-label="Previous image"
               onClick={onPrev}
-              className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 shadow-2xl transition-[transform,background-color] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-white border border-white/15 shadow-2xl transition-[transform,background-color] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
               title="Previous image (←)"
             >
               <ChevronLeft className="w-6 h-6" />
@@ -541,7 +657,7 @@ const ListingLightboxModal: React.FC<LightboxModalProps> = ({
               type="button"
               aria-label="Next image"
               onClick={onNext}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-slate-900/80 hover:bg-slate-800 text-white border border-slate-700 shadow-2xl transition-[transform,background-color] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-white border border-white/15 shadow-2xl transition-[transform,background-color] duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
               title="Next image (→)"
             >
               <ChevronRight className="w-6 h-6" />
@@ -551,7 +667,7 @@ const ListingLightboxModal: React.FC<LightboxModalProps> = ({
       </div>
 
       {images.length > 1 && (
-        <div className="absolute bottom-4 flex items-center gap-2 p-2 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 max-w-md overflow-x-auto z-20">
+        <div className="absolute bottom-4 flex items-center gap-2 p-2 bg-zinc-900/90 backdrop-blur-md rounded-xl border border-white/10 max-w-md overflow-x-auto z-20">
           {images.map((imgUrl, idx) => (
             <button
               key={imgUrl}
@@ -578,7 +694,7 @@ const ListingLightboxModal: React.FC<LightboxModalProps> = ({
 };
 
 /**
- * Interactive card displaying a canonical Bangalore rental listing with Google Maps deep links.
+ * High-craft monochrome card displaying a Bangalore rental listing with exact IST timestamps and Google Maps links.
  */
 export const ListingCard: React.FC<ListingCardProps> = ({
   listing,
@@ -622,7 +738,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
 
   return (
     <>
-      <div className="glass-panel glass-panel-hover p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden group">
+      <article className="bg-[#111114] hover:bg-[#141418] border border-white/[0.07] hover:border-white/[0.15] p-4 rounded-xl flex flex-col justify-between relative overflow-hidden transition-[background-color,border-color] duration-160 ease-[var(--ease-out)]">
         <div>
           <ListingPhotoBanner
             images={images}
@@ -632,75 +748,20 @@ export const ListingCard: React.FC<ListingCardProps> = ({
             onPrev={handlePrevImage}
             onNext={handleNextImage}
             onOpenLightbox={() => setIsLightboxOpen(true)}
-            onQuickInspect={onOpenDrawer ? () => onOpenDrawer(listing) : undefined}
           />
 
-          <ListingAuthorBar listing={listing} />
+          <ListingHeaderMetaRow listing={listing} onOpenScoreModal={onOpenScoreModal} />
 
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-                  {listing.bhkType}
-                </span>
-                <span className="text-xs text-slate-400">
-                  {e.societyName ? `in ${e.societyName}` : listing.location}
-                </span>
-              </div>
-              <h3 className="text-base font-bold text-white mt-1 leading-snug">
-                {e.societyName || `${listing.location} (near PTP)`}
-              </h3>
-              <ListingMapsLinksRow listing={listing} />
-            </div>
+          <ListingTitleAndPriceRow listing={listing} />
 
-            <RatingBadge
-              score={listing.score}
-              tier={listing.tier}
-              onClick={() => onOpenScoreModal(listing)}
-            />
-          </div>
-
-          <div className="flex items-baseline gap-2 mb-4 pb-3 border-b border-slate-800/80">
-            <div className="text-2xl font-extrabold text-white font-mono tabular-nums">
-              {e.rent ? `₹${e.rent.toLocaleString('en-IN')}` : 'Contact for Rent'}
-            </div>
-            <span className="text-xs text-slate-400">/ month</span>
-
-            {e.deposit && (
-              <span className="text-xs text-slate-400 ml-auto font-mono tabular-nums">
-                Dep: ₹{e.deposit.toLocaleString('en-IN')}
-              </span>
-            )}
-          </div>
-
-          <div className="mb-4">
-            <CommutePill commute={listing.commute} />
-          </div>
+          <ListingExpandableDescription
+            rawText={listing.rawText}
+            groupName={listing.groupName}
+            authorName={listing.authorName}
+          />
 
           <ListingFeatureTags listing={listing} />
-
-          <ListingExpandableDescription rawText={listing.rawText} />
-
-          {e.contactPhone && (
-            <div className="flex items-center justify-between bg-slate-900/90 border border-slate-800 px-3 py-2 rounded-xl mb-4 text-xs">
-              <span className="text-slate-400 flex items-center gap-1.5 font-medium">
-                <Phone className="w-3.5 h-3.5 text-cyan-400" />
-                Phone:
-              </span>
-              <button
-                type="button"
-                aria-label={`Copy phone number ${e.contactPhone}`}
-                onClick={() => {
-                  navigator.clipboard.writeText(e.contactPhone ?? '');
-                  toast.info(`Copied phone: +91 ${e.contactPhone}`);
-                }}
-                className="font-mono tabular-nums font-bold text-white tracking-wider hover:text-cyan-300 transition-colors duration-140 ease-[var(--ease-out)] active:scale-[0.97]"
-                title="Click to copy phone number"
-              >
-                +91 {e.contactPhone}
-              </button>
-            </div>
-          )}
+          <ListingMapsLinksRow listing={listing} />
         </div>
 
         <ListingCardFooter
@@ -709,7 +770,7 @@ export const ListingCard: React.FC<ListingCardProps> = ({
           onStatusChange={onStatusChange}
           onOpenDrawer={onOpenDrawer}
         />
-      </div>
+      </article>
 
       {isLightboxOpen && images.length > 0 && (
         <ListingLightboxModal

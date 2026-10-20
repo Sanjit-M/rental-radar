@@ -101,6 +101,23 @@ export interface ScrapeStatusResult {
   readonly updatedAt?: string | undefined;
 }
 
+/** Single scrape execution telemetry log entry. */
+export interface ScrapeLogEntry {
+  readonly id: number;
+  readonly runAt: string;
+  readonly groupsScanned: number;
+  readonly itemsScanned: number;
+  readonly itemsMatched: number;
+  readonly status: string;
+  readonly errorMessage: string | null;
+  readonly durationMs: number;
+}
+
+/** Dashboard stats enriched with optional recent scrape run telemetry logs. */
+export type DashboardStatsWithLogs = DashboardStats & {
+  readonly scrapeLogs?: readonly ScrapeLogEntry[] | undefined;
+};
+
 // ─── Boundary Schemas (Effect Schema) ─────────────────────────────────────────
 
 const FbGroupSchema = Schema.Struct({
@@ -149,6 +166,17 @@ const PlacesResponseSchema = Schema.Union(
   }),
 );
 
+const ScrapeLogEntrySchema = Schema.Struct({
+  id: Schema.Number,
+  runAt: Schema.String,
+  groupsScanned: Schema.Number,
+  itemsScanned: Schema.Number,
+  itemsMatched: Schema.Number,
+  status: Schema.String,
+  errorMessage: Schema.NullOr(Schema.String),
+  durationMs: Schema.Number,
+});
+
 const DashboardStatsSchema = Schema.Struct({
   totalListings: Schema.Number,
   unicornMatches: Schema.Number,
@@ -159,6 +187,7 @@ const DashboardStatsSchema = Schema.Struct({
   poolCount: Schema.Number,
   directOwnerCount: Schema.Number,
   lastScrapeTime: Schema.NullOr(Schema.String),
+  scrapeLogs: Schema.optional(Schema.Array(ScrapeLogEntrySchema)),
 });
 
 const TriggerScrapeResponseSchema = Schema.Struct({
@@ -358,9 +387,9 @@ export const api = {
   /**
    * Fetch aggregate dashboard statistics.
    *
-   * @returns A Result containing `DashboardStats` or an `ApiError`.
+   * @returns A Result containing `DashboardStatsWithLogs` or an `ApiError`.
    */
-  async getStats(): Promise<Result<DashboardStats, ApiError>> {
+  async getStats(): Promise<Result<DashboardStatsWithLogs, ApiError>> {
     const decodeStats = Schema.decodeUnknownSync(DashboardStatsSchema);
     return Effect.runPromise(
       executeRequestEffect(
